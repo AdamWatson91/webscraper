@@ -4,6 +4,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import NoSuchElementException
 from bs4 import BeautifulSoup
 import requests
 import time
@@ -66,14 +67,27 @@ class Scraper:
         data = [i.text for i in data]
         return data
 
+    def scrape_multiple_page_elements(self, **kwargs):
+        Scraped_dict = kwargs
+        
+        for k, v in kwargs.items():
+            data = self.driver.find_elements(By.XPATH, v)
+            data = [i.text for i in data]
+            Scraped_dict[k].append(data)
+        return Scraped_dict
+    
+    def testing_kwargs(self, **kwargs):
+        print(kwargs)
+        print(kwargs.items())
+        print(kwargs.values())
+
+        
+
     def navigate_to(self, xpath, link_tag):
         link = self.driver.find_element(By.XPATH, xpath)
         link = link.get_attribute(link_tag)
         self.driver.get(link)
         time.sleep(3)
-    
-    
-
     
     def scroll_page(self):
         self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
@@ -147,18 +161,46 @@ class Scraper:
 if __name__ == "__main__":
     URL = 'https://www.allrecipes.com/search/results/?search='
     bot  = Scraper(URL)
+    #bot.testing_kwargs(ingredient_list_multi='//span[@class="ingredients-item-name elementFont__body"]', recipe_meta_multi='//div[@class="recipe-meta-item"]')
     bot.accept_cookies('//*[@id="onetrust-accept-btn-handler"]',None)
-    bot.navigate_to('//a[@class="card__titleLink manual-link-behavior elementFont__titleLink margin-8-bottom"]', 'href')
-    ingredient_list = bot.scrape_page_elements('//span[@class="ingredients-item-name elementFont__body"]')
-    recipe_meta = bot.scrape_page_elements('//div[@class="recipe-meta-item"]')
-    print(ingredient_list)
-    print(recipe_meta)
-    main_image = bot.download_image('//div[@class="component lazy-image lazy-image-udf lead-media ugc-photos-link aspect_3x2 rendered image-loaded"]')
-    print(main_image)
+    #bot.navigate_to('//a[@class="card__titleLink manual-link-behavior elementFont__titleLink margin-8-bottom"]', 'href')
+    
+    #print(ingredient_list)
+    #print(recipe_meta)
+    #scrape_page = bot.scrape_page_elements(ingredient_list_multi='//span[@class="ingredients-item-name elementFont__body"]',recipe_meta_multi='//div[@class="recipe-meta-item"]')
+    #print(scrape_page)
+    
+    links = bot.scrape_page_links('//a[@class="card__titleLink manual-link-behavior elementFont__titleLink margin-8-bottom"]', 1)
+    
+    recipe_dict = {
+                    'link': [],    
+                    'ingredient_list': [],
+                    'recipe_meta': []
+                    }
+    
+    for link in links:
+        bot.driver.get(link)
+        time.sleep(2)
+        recipe_dict['link'].append(link)
+        try:
+            ingredient_list = bot.scrape_page_elements('//span[@class="ingredients-item-name elementFont__body"]')
+            recipe_dict['ingredient_list'].append(ingredient_list)
+        except NoSuchElementException:
+            print('No Element found')
+            recipe_dict['ingredient_list'].append('N/A')
+        try:
+            recipe_meta = bot.scrape_page_elements('//div[@class="recipe-meta-item"]')
+            recipe_dict['recipe_meta'].append(recipe_meta)
+        except NoSuchElementException:
+            print('No Element found')
+            recipe_dict['recipe_meta'].append('N/A')
+    
+    print(recipe_dict)
+    #main_image = bot.download_image('//div[@class="component lazy-image lazy-image-udf lead-media ugc-photos-link aspect_3x2 rendered image-loaded"]')
+    #print(main_image)
     # #bot.perform_search_with_bar('//*[@id="primary-search"]', 'some text')
     # bot.scroll_page()
     # bot.scroll_infinite()
-    # links = bot.scrape_page_links('//a[@class="card__titleLink manual-link-behavior elementFont__titleLink margin-8-bottom"]', 2)
     # print(links)
     # path for the main image //div[@class='component lazy-image lazy-image-udf lead-media ugc-photos-link aspect_3x2 rendered image-loaded']
 
