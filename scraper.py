@@ -85,12 +85,7 @@ class Scraper:
                 v_element = 'N/A'
             scraped_dict[k] = v_element
         return scraped_dict
-    #     try:
-    #         ingredient_list = bot.scrape_page_elements('//span[@class="ingredients-item-name elementFont__body"]')
-    #         recipe_dict['ingredient_list'].append(ingredient_list)
-    #     except NoSuchElementException:
-    #         print('No Element found')
-    #         recipe_dict['ingredient_list'].append('N/A')
+
     def navigate_to(self, xpath, link_tag):
         link = self.driver.find_element(By.XPATH, xpath)
         link = link.get_attribute(link_tag)
@@ -118,8 +113,6 @@ class Scraper:
             previous_height = new_height
             if scroll_count == max_scroll and max_scroll is not None:
                 break
-            
-            
 
     def scrape_page_links(self, xpath, max_scroll=None):
         scroll_count = 0
@@ -140,7 +133,6 @@ class Scraper:
                 break
         link = [links.get_attribute('href') for links in links]
         return link
-
 
     def login(self, username, password, user_xpath, pass_xpath, button_xpath):
             user_entry = self.driver.find_element(By.XPATH, user_xpath)
@@ -164,7 +156,7 @@ class Scraper:
         urllib.request.urlretrieve(img,file_name)
     
     def create_directory(self,directory_name, directory_path ):
-            # identify the root of the path
+        # identify the root of the path
         self.directory_name = directory_name
         self.directory_path = directory_path
         self.path = os.path.join(self.directory_path, self.directory_name)
@@ -183,22 +175,13 @@ if __name__ == "__main__":
     bot  = Scraper(URL)
     bot.accept_cookies('//*[@id="onetrust-accept-btn-handler"]',None)
     #bot.navigate_to('//a[@class="card__titleLink manual-link-behavior elementFont__titleLink margin-8-bottom"]', 'href')
-    #scaped_dict = bot.scrape_multiple_page_elements_v2(ingredients_list_multi='//span[@class="ingredients-item-name elementFont__body"]', recipe_meta='//div[@class="recipe-meta-item"]')
-    #print(scaped_dict)
 
     links = bot.scrape_page_links('//a[@class="card__titleLink manual-link-behavior elementFont__titleLink margin-8-bottom"]',1)
-    # scraped_dict = {}
-    # scaped_page_dict = bot.scrape_multiple_page_elements_v2(ingredients_list_multi='//span[@class="ingredients-item-name elementFont__body"]', recipe_meta='//div[@class="recipe-meta-item"]')
-    # print(scaped_page_dict)
-    # for link in links:
-    #     bot.driver.get(link)
-    #     time.sleep(2)
-    #     scaped_page_dict = bot.scrape_multiple_page_elements_v2(ingredients_list_multi='//span[@class="ingredients-item-name elementFont__body"]', recipe_meta='//div[@class="recipe-meta-item"]')
-    # print(scraped_dict)
-    # bot.create_directory('raw_data',os.getcwd())
+    root_path = os.getcwd()
+    bot.create_directory('raw_data', root_path)
 
     for link in links:
-        # ENHANCEMENT: Donwload multiple images
+        # ENHANCEMENT: Download multiple images
         # ENHANCEMENT: Improve the path create logic, the code is fairly unreadable right now. Could create variables
         bot.driver.get(link)
         time.sleep(2)
@@ -216,25 +199,20 @@ if __name__ == "__main__":
             recipe_meta='//div[@class="recipe-meta-item"]'
             )
         recipe_dict.update(scraped_page_dict)
-        print(recipe_dict)
-    #     try:
-    #         ingredient_list = bot.scrape_page_elements('//span[@class="ingredients-item-name elementFont__body"]')
-    #         recipe_dict['ingredient_list'].append(ingredient_list)
-    #     except NoSuchElementException:
-    #         print('No Element found')
-    #         recipe_dict['ingredient_list'].append('N/A')
-    #     try:
-    #         recipe_meta = bot.scrape_page_elements('//div[@class="recipe-meta-item"]')
-    #         recipe_dict['recipe_meta'].append(recipe_meta)
-    #     except NoSuchElementException:
-    #         print('No Element found')
-    #         recipe_dict['recipe_meta'].append('N/A')
-    #     bot.create_directory(str(recipe_id), os.path.join(os.getcwd(),'raw_data'))
-    #     with open(os.path.join(os.getcwd(),'raw_data',str(recipe_id) ,'data.json'), mode='w') as f:
-    #         json.dump(recipe_dict, f)
-    #     time.sleep(1)
-    #     bot.create_directory('images',os.path.join(os.getcwd(),'raw_data',str(recipe_id)))
-    #     bot.download_image('//div[@class="inner-container js-inner-container image-overlay"]/img', os.path.join(os.getcwd(),'raw_data',str(recipe_id),'images'+'/'+str(0)))
-    print(recipe_dict)
+        raw_data_path = os.path.join(root_path,'raw_data')
+        bot.create_directory(str(recipe_id), raw_data_path)
+        recipe_path = os.path.join(raw_data_path, str(recipe_id))
+        with open(os.path.join(recipe_path,'data.json'), mode='w') as f:
+            json.dump(recipe_dict, f)
+        time.sleep(1)
+        bot.create_directory('images',recipe_path)
+        images_path = os.path.join(recipe_path,'images')
+        bot.download_image('//div[@class="inner-container js-inner-container image-overlay"]/img', os.path.join(images_path, str(0)))
 
-
+        # unit testing ideas:
+        # 1. Check that the uuid4 does not duplicate
+        # 2. Check it gets the images for each, could probaly att wait for element to my functions for safety
+        # 3. Add extra element in does it still work
+        # 4. Change website, does it still work
+        # 5. If there is a duplicate id will it error
+        # 6. Does the data scraped match the expected values (foudn it doesn't seem to line 1/4 or brackets like (12 Ounce))
