@@ -9,6 +9,7 @@ from selenium.common.exceptions import NoSuchElementException
 from bs4 import BeautifulSoup
 from itertools import groupby
 from urllib.parse import urlparse, parse_qs
+import urllib.request
 import requests
 import time
 import random
@@ -72,41 +73,24 @@ class Scraper:
         data = self.driver.find_elements(By.XPATH, xpath)
         data = [i.text for i in data]
         return data
-
-    def scrape_multiple_page_elements(self, **kwargs):
-        scraped_dict = kwargs
-        
-        for k, v in kwargs.items():
-            data = self.driver.find_elements(By.XPATH, v)
-            data = [i.text for i in data]
-            scraped_dict[k].append(data)
-        return scraped_dict
     
     def scrape_multiple_page_elements_v2(self, **kwargs):
         scraped_dict = {}
         for k, v in kwargs.items():
-            v_element = self.driver.find_elements(By.XPATH, v)
-            v_element = [i.text for i in v_element]
+            try:
+                v_element = self.driver.find_elements(By.XPATH, v)
+                v_element = [i.text for i in v_element]
+            except NoSuchElementException:
+                print('No Element found')
+                v_element = 'N/A'
             scraped_dict[k] = v_element
         return scraped_dict
-        # going to need to then append for each link
-        # for key,val in kwarg.items():
-        #   if key in d:
-        #     scraped_dict[key] = [scraped_dict[key],val]
-            
-        
-        #for v in scaped_dict:
-        #     data = self.driver.find_elements(By.XPATH, kwargs.values())
-        #     data = [i.text for i in data]
-        #     scraped_dict[v].append(data)
-
-        # return scraped_dict
-    
-    def testing_kwargs(self, **kwargs):
-        print(kwargs)
-        print(kwargs.items())
-        print(kwargs.values())
-
+    #     try:
+    #         ingredient_list = bot.scrape_page_elements('//span[@class="ingredients-item-name elementFont__body"]')
+    #         recipe_dict['ingredient_list'].append(ingredient_list)
+    #     except NoSuchElementException:
+    #         print('No Element found')
+    #         recipe_dict['ingredient_list'].append('N/A')
     def navigate_to(self, xpath, link_tag):
         link = self.driver.find_element(By.XPATH, xpath)
         link = link.get_attribute(link_tag)
@@ -172,12 +156,12 @@ class Scraper:
         [page] = query['page']
     
     def generate_uuid4(self):
-        self.uuid_foir = uuid.uuid4()
+        self.uuid_four = uuid.uuid4()
     
-    def download_image(self, xpath):
-        img = self.driver.find_elements(By.XPATH, xpath).text
-        # img = [i.text for i in data]
-        return img
+    def download_image(self, xpath, file_name):
+        img = self.driver.find_element(By.XPATH, xpath)
+        img = img.get_attribute('src')
+        urllib.request.urlretrieve(img,file_name)
     
     def create_directory(self,directory_name, directory_path ):
             # identify the root of the path
@@ -204,46 +188,53 @@ if __name__ == "__main__":
 
     links = bot.scrape_page_links('//a[@class="card__titleLink manual-link-behavior elementFont__titleLink margin-8-bottom"]',1)
     # scraped_dict = {}
+    # scaped_page_dict = bot.scrape_multiple_page_elements_v2(ingredients_list_multi='//span[@class="ingredients-item-name elementFont__body"]', recipe_meta='//div[@class="recipe-meta-item"]')
+    # print(scaped_page_dict)
     # for link in links:
     #     bot.driver.get(link)
     #     time.sleep(2)
     #     scaped_page_dict = bot.scrape_multiple_page_elements_v2(ingredients_list_multi='//span[@class="ingredients-item-name elementFont__body"]', recipe_meta='//div[@class="recipe-meta-item"]')
-    #     # scraped_dict.update(scraped_dict)
     # print(scraped_dict)
-    bot.create_directory('raw_data',os.getcwd())
+    # bot.create_directory('raw_data',os.getcwd())
 
     for link in links:
-        recipe_dict = {
-                'recipe_id': [],
-                'link': [],    
-                'ingredient_list': [],
-                'recipe_meta': []
-                }
+        # ENHANCEMENT: Donwload multiple images
+        # ENHANCEMENT: Improve the path create logic, the code is fairly unreadable right now. Could create variables
         bot.driver.get(link)
         time.sleep(2)
         recipe_id = [int(''.join(group)) for key, group in groupby(iterable=link, key=lambda e: e.isdigit()) if key]
-        recipe_dict['recipe_id'].append(recipe_id)
-        recipe_dict['link'].append(link)
-        try:
-            ingredient_list = bot.scrape_page_elements('//span[@class="ingredients-item-name elementFont__body"]')
-            recipe_dict['ingredient_list'].append(ingredient_list)
-        except NoSuchElementException:
-            print('No Element found')
-            recipe_dict['ingredient_list'].append('N/A')
-        try:
-            recipe_meta = bot.scrape_page_elements('//div[@class="recipe-meta-item"]')
-            recipe_dict['recipe_meta'].append(recipe_meta)
-        except NoSuchElementException:
-            print('No Element found')
-            recipe_dict['recipe_meta'].append('N/A')
-        bot.create_directory(str(recipe_id), os.path.join(os.getcwd(),'raw_data'))
-        with open(os.path.join(os.getcwd(),'raw_data',str(recipe_id) ,'data.json'), mode='w') as f:
-            json.dump(recipe_dict, f)
+        uuid4 = bot.generate_uuid4
+        recipe_dict = {
+                'recipe_id': [uuid4],
+                'recipe_id': [recipe_id],
+                'link': [link],    
+    #             'ingredient_list': [],
+    #             'recipe_meta': []
+                 }
+        scraped_page_dict = bot.scrape_multiple_page_elements_v2(
+            ingredient_list='//span[@class="ingredients-item-name elementFont__body"]', 
+            recipe_meta='//div[@class="recipe-meta-item"]'
+            )
+        recipe_dict.update(scraped_page_dict)
+        print(recipe_dict)
+    #     try:
+    #         ingredient_list = bot.scrape_page_elements('//span[@class="ingredients-item-name elementFont__body"]')
+    #         recipe_dict['ingredient_list'].append(ingredient_list)
+    #     except NoSuchElementException:
+    #         print('No Element found')
+    #         recipe_dict['ingredient_list'].append('N/A')
+    #     try:
+    #         recipe_meta = bot.scrape_page_elements('//div[@class="recipe-meta-item"]')
+    #         recipe_dict['recipe_meta'].append(recipe_meta)
+    #     except NoSuchElementException:
+    #         print('No Element found')
+    #         recipe_dict['recipe_meta'].append('N/A')
+    #     bot.create_directory(str(recipe_id), os.path.join(os.getcwd(),'raw_data'))
+    #     with open(os.path.join(os.getcwd(),'raw_data',str(recipe_id) ,'data.json'), mode='w') as f:
+    #         json.dump(recipe_dict, f)
+    #     time.sleep(1)
+    #     bot.create_directory('images',os.path.join(os.getcwd(),'raw_data',str(recipe_id)))
+    #     bot.download_image('//div[@class="inner-container js-inner-container image-overlay"]/img', os.path.join(os.getcwd(),'raw_data',str(recipe_id),'images'+'/'+str(0)))
     print(recipe_dict)
 
-    #main_image = bot.download_image('//div[@class="component lazy-image lazy-image-udf lead-media ugc-photos-link aspect_3x2 rendered image-loaded"]')
-    #print(main_image)
-
-
-    # path for the main image //div[@class='component lazy-image lazy-image-udf lead-media ugc-photos-link aspect_3x2 rendered image-loaded']
 
