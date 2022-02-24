@@ -24,6 +24,9 @@ from pathlib import Path
 # options.add_argument('disable-infobars')
 # options.add_argument('--disable-extensions')
 
+#REFACTORING ENHANCEMENTS:
+# 1. Review the functions and note where functions do the same thing and package this into a function and call it. E.g. i have many find_elements throughout
+
 class Scraper:
     def __init__(self, url, options=None):
         self.url = url
@@ -32,15 +35,6 @@ class Scraper:
         else:
             self.driver = webdriver.Chrome(ChromeDriverManager().install())
         self.driver.get(self.url)
-        self.accept_cookies
-        self.perform_search_with_bar
-        self.scrape_element
-        self.scrape_page_elements
-        self.navigate_to
-        self.scroll_page
-        self.scroll_infinite
-        self.scrape_page_links
-        self.login
 
     def accept_cookies(self, xpath, iframe=None):
         time.sleep(2)
@@ -74,7 +68,7 @@ class Scraper:
         data = [i.text for i in data]
         return data
     
-    def scrape_multiple_page_elements_v2(self, **kwargs):
+    def scrape_multiple_page_elements(self, **kwargs):
         scraped_dict = {}
         for k, v in kwargs.items():
             try:
@@ -142,14 +136,14 @@ class Scraper:
             sign_in_button = self.driver.find_element(By.XPATH, button_xpath)
             sign_in_button.click()
 
-    def generate_uid(self):
-        parsed = urlparse(self.url)
-        query = parse_qs(parsed.query)
-        [page] = query['page']
+    # def generate_uid(self):
+    #     parsed = urlparse(self.url)
+    #     query = parse_qs(parsed.query)
+    #     [page] = query['page']
     
     def generate_uuid4(self):
         self.uuid_four = uuid.uuid4()
-    
+
     def download_image(self, xpath, file_name):
         img = self.driver.find_element(By.XPATH, xpath)
         img = img.get_attribute('src')
@@ -175,28 +169,28 @@ if __name__ == "__main__":
     bot  = Scraper(URL)
     bot.accept_cookies('//*[@id="onetrust-accept-btn-handler"]',None)
     #bot.navigate_to('//a[@class="card__titleLink manual-link-behavior elementFont__titleLink margin-8-bottom"]', 'href')
-
     links = bot.scrape_page_links('//a[@class="card__titleLink manual-link-behavior elementFont__titleLink margin-8-bottom"]',1)
     root_path = os.getcwd()
     bot.create_directory('raw_data', root_path)
 
     for link in links:
         # ENHANCEMENT: Download multiple images
-        # ENHANCEMENT: Improve the path create logic, the code is fairly unreadable right now. Could create variables
+        # ENHANCEMENT: Add logic...
         bot.driver.get(link)
         time.sleep(2)
         recipe_id = [int(''.join(group)) for key, group in groupby(iterable=link, key=lambda e: e.isdigit()) if key]
-        uuid4 = bot.generate_uuid4
+        uuid4 = str(bot.generate_uuid4)
         recipe_dict = {
-                'recipe_id': [uuid4],
+                'recipe_uuid4': [uuid4],
                 'recipe_id': [recipe_id],
                 'link': [link],    
-    #             'ingredient_list': [],
-    #             'recipe_meta': []
                  }
-        scraped_page_dict = bot.scrape_multiple_page_elements_v2(
+        scraped_page_dict = bot.scrape_multiple_page_elements(
             ingredient_list='//span[@class="ingredients-item-name elementFont__body"]', 
-            recipe_meta='//div[@class="recipe-meta-item"]'
+            recipe_meta='//div[@class="recipe-meta-item"]',
+            direction_steps='//ul[@class="instructions-section"]/li[@class="subcontainer instructions-section-item"][*]/label[@class="checkbox-list"]',
+            directions_instructions='//div[@class="section-body elementFont__body--paragraphWithin elementFont__body--linkWithin"]/div[@class="paragraph"]/p',
+            nutrition_summary= '//div[@class="section-body"]'
             )
         recipe_dict.update(scraped_page_dict)
         raw_data_path = os.path.join(root_path,'raw_data')
@@ -216,3 +210,4 @@ if __name__ == "__main__":
         # 4. Change website, does it still work
         # 5. If there is a duplicate id will it error
         # 6. Does the data scraped match the expected values (foudn it doesn't seem to line 1/4 or brackets like (12 Ounce))
+        # 7. using find elements when there is only one element in the multiple scraper - does it still work?
