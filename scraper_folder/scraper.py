@@ -17,6 +17,8 @@ import uuid
 import os
 import json
 from pathlib import Path
+from typing import Optional, Iterable
+
 
 # research the below options and more and decide whther to implement
 # options = webdriver.ChromeOptions()
@@ -24,9 +26,11 @@ from pathlib import Path
 # options.add_argument('disable-infobars')
 # options.add_argument('--disable-extensions')
 
-#REFACTORING ENHANCEMENTS:
+# REFACTORING ENHANCEMENTS:
 # 1. Review the functions and note where functions do the same thing and package this into a function and call it. E.g. i have many find_elements throughout
 # 2. Check whether i have static methods here
+
+
 class Scraper:
     """
     This class provides the main functionality required to webscrape data using Chrome Webdriver.
@@ -35,8 +39,12 @@ class Scraper:
         url (str) : The url to begin the web scarper
         options (str): The desired web driver options to the user desires
             (default is None)
+    
+    Attributes:
+    driver:
+        This is the webdriver object.
     """
-    def __init__(self, url, options=None):
+    def __init__(self, url : str, options : Optional[str] = None) -> None:
         """
         See help(Scraper) for accurate signature.
         """
@@ -47,26 +55,57 @@ class Scraper:
             self.driver = webdriver.Chrome(ChromeDriverManager().install())
         self.driver.get(self.url)
     
-    def create_json(self, path, file_name):
-        with open(os.path.join(path,file_name), mode='w') as f:
+    def create_json(self, path : str, file_name : str) -> None:
+        """
+        This function creates a json file from a dictionary.
+
+        Args:
+            path (str): The full directory path that the user wants to save the
+                        file to.
+            file_name (str): The desired name for the file which will be saved 
+                                in the path.
+        """
+        with open(os.path.join(path, file_name), mode='w') as f:
             json.dump(recipe_dict, f)
         time.sleep(1)
 
-    def get_root_path(self):
+    def get_root_path(self) -> str:
+        """
+        This function provides the root directory for the module.
+
+        Returns:
+            root_path (str): The directory for which the module is run from.
+        """
         root_path = os.getcwd()
         return root_path
     
-    def extract_continous_digit_group(self, iterable_lelement):
-        digit_group = [int(''.join(group)) for key, group in groupby(iterable=iterable_lelement, key=lambda e: e.isdigit()) if key]
+    def extract_continous_digit_group(self, iterable_element : Iterable[str]) -> str:
+        """
+        This functions identifies a continuous set of numbers in a string 
+        and returns it.
+
+        It is common for a URL to include a unique identifier for the subject
+        of the page. This function can be used to extract this by looping through 
+        an iterable and checkign where there is a string with multiple digits.
+        These digits are reutrned as a string.
+
+        Args:
+            iterable_element (Iterable[str]): The iterable string for which the user wants to extract a 
+                                                continuous digit
+
+        Returns:
+            digit_group (str): The string of continuous digits extracted from the iterable string.
+        """
+        digit_group = [int(''.join(group)) for key, group in groupby(iterable=iterable_element, key=lambda e: e.isdigit()) if key]
         return str(digit_group)
 
-    def accept_cookies(self, xpath, iframe=None):
+    def accept_cookies(self, xpath : str, iframe : Optional[str] = None) -> None:
         """
         This function will click an accept cookies button.
 
         Args:
             xpath (str): Xpath link for the accept cookies button which will be clicked once found.
-            iframe (str): Xpath link for the iframe with the accept cookie button
+            iframe (str): Xpath link for the iframe with the accept cookie button.
                 (default is None)
         """
         time.sleep(2)
@@ -82,7 +121,7 @@ class Scraper:
         else:
             print('No cookies button clicked with xpath provided')
     
-    def perform_search_with_bar(self, xpath, text):
+    def perform_search_with_bar(self, xpath : str, text : str) -> None:
         """
         This function will type and search for the inputted text 
         using the websites search bar by pressing Enter.
@@ -96,7 +135,7 @@ class Scraper:
         search_bar.send_keys(text)
         time.sleep(1) # Sleep to monitor testing
 
-    def scrape_element(self, xpath):
+    def scrape_element(self, xpath : str) -> str:
         """
         This function will find and scrape and convert to text
         a single element.
@@ -104,12 +143,12 @@ class Scraper:
         Args:
             xpath (str): Xpath link for the element to be scraped.
         Returns:
-            str: a string representing the text in the specified element
+            data (str): a string representing the text in the specified element
         """
         data = self.driver.find_element(By.XPATH, xpath).text
         return data
 
-    def scrape_page_elements(self, xpath):
+    def scrape_page_elements(self, xpath : str) -> str:
         """
         This function will find and scrape a list of elements. 
         Each list element will be converted to text.
@@ -117,13 +156,13 @@ class Scraper:
         Args:
             xpath (str): Xpath link for the element to be scraped.
                 Returns:
-            list: a list of string representing the text in the specified elements list.
+            data (list): a list of string representing the text in the specified elements list.
         """
         data = self.driver.find_elements(By.XPATH, xpath)
         data = [i.text for i in data]
         return data
     
-    def scrape_multiple_page_elements(self, **kwargs):
+    def scrape_multiple_page_elements(self, **kwargs : str) -> dict:
         """
         This function creates scrapes n elements input by the user and
         stored them in a dictionary, ready for JSON.
@@ -134,7 +173,7 @@ class Scraper:
             kwargs (dict): The key should be the name for scraped element and 
                             the value should be the xpath for the element.
         Returns:
-            dict: a dictionary representing the key(s) name specified with the a list
+            scraped_dict (dict): a dictionary representing the key(s) name specified with the a list
                     of strings for each item in the the specified elements list.
         """
         scraped_dict = {}
@@ -148,7 +187,7 @@ class Scraper:
             scraped_dict[k] = v_element
         return scraped_dict
 
-    def navigate_to(self, xpath, link_tag):
+    def navigate_to(self, xpath : str, link_tag : str) -> None:
         """
         This function finds and clicks a link based on an xpath.
 
@@ -161,16 +200,16 @@ class Scraper:
         self.driver.get(link)
         time.sleep(1)
     
-    def scroll_page(self):
+    def scroll_page(self) -> None:
         """
         This function scrolls to bottom of the page once.
 
-        If your webpage is an infinite scroll see function scroll_infinite()
+        If your webpage is an infinite scroll see function scroll_infinite().
         """
         self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         time.sleep(1)
 
-    def scroll_infinite(self, max_scroll=None):
+    def scroll_infinite(self, max_scroll : int = None) -> None:
         """
         This function will scroll infinity to the specified number of scrolls.
 
@@ -178,8 +217,8 @@ class Scraper:
             max_scroll (int): The number of scrolls the user would like to perform.
                 (default is None)
         """
-        #ENHANCEMENT: Could ask user number of products per page and the number products they want to calculate the max scroll
-        #ENHANCEMENT: or simply change max_scroll to number of elemnts desired.
+        # ENHANCEMENT: Could ask user number of products per page and the number products they want to calculate the max scroll
+        # ENHANCEMENT: or simply change max_scroll to number of elemnts desired.
         scroll_count = 0
         previous_height = self.driver.execute_script("return document.body.scrollHeight")
         while True:
@@ -196,7 +235,7 @@ class Scraper:
             if scroll_count == max_scroll and max_scroll is not None:
                 break
 
-    def scrape_page_links(self, xpath, max_scroll=None):
+    def scrape_page_links(self, xpath : str, max_scroll : int = None) -> list:
         """
         This function will scroll infinity and scrape all of the desired 'href' 
         elements using the xpath.
@@ -206,7 +245,7 @@ class Scraper:
             max_scroll (int): The number of scrolls the user would like to perform.
                 (default is None)
         Returns:
-            list: a list of strings representing the text for the url for the specified elements
+            link (list): a list of strings representing the text for the url for the specified elements
                     list.
         """
         scroll_count = 0
@@ -236,17 +275,17 @@ class Scraper:
     #         sign_in_button = self.driver.find_element(By.XPATH, button_xpath)
     #         sign_in_button.click()
     
-    def generate_uuid4(self):
+    def generate_uuid4(self) -> str:
         """
         This function will generate a random unquie identifier using the uuid4 format.
 
         Returns:
-            str: a string representing the random uuid4.
+            uuid_four (str): a string representing the random uuid4.
         """
         uuid_four = str(uuid.uuid4())
         return uuid_four
 
-    def download_image(self, xpath, file_name):
+    def download_image(self, xpath : str, file_name : str) -> None:
         """
         This function will find the 'src' attribute for the image and download
         the image to a speified file name.
@@ -262,7 +301,7 @@ class Scraper:
         img = self.driver.find_element(By.XPATH, xpath).get_attribute('src')
         urllib.request.urlretrieve(img, file_name)
     
-    def create_directory(self, directory_name, directory_path):
+    def create_directory(self, directory_name : str, directory_path : str) -> None:
         """
         This function create a folder in the directory desired with the name desired.
 
