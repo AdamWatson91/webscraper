@@ -134,6 +134,7 @@ class Scraper:
         search_bar.clear()
         search_bar.send_keys(text)
         time.sleep(1) # Sleep to monitor testing
+        search_bar.send_keys(Keys.ENTER)
 
     def scrape_element(self, xpath : str) -> str:
         """
@@ -164,10 +165,11 @@ class Scraper:
     
     def scrape_multiple_page_elements(self, **kwargs : str) -> dict:
         """
-        This function creates scrapes n elements input by the user and
-        stored them in a dictionary, ready for JSON.
+        This function scrapes n elements input by the user and
+        stores them in a dictionary, ready for JSON.
 
-        User can use .update() to add to an existing
+        User can use .update() after running this to add to an 
+        existing dictionary.
 
         Args:
             kwargs (dict): The key should be the name for scraped element and 
@@ -323,7 +325,7 @@ class Scraper:
 
 if __name__ == "__main__":
     URL = 'https://www.allrecipes.com/search/results/?search='
-    bot  = Scraper(URL)
+    bot = Scraper(URL)
     bot.accept_cookies('//*[@id="onetrust-accept-btn-handler"]',None)
     #bot.navigate_to('//a[@class="card__titleLink manual-link-behavior elementFont__titleLink margin-8-bottom"]', 'href')
     links = bot.scrape_page_links('//a[@class="card__titleLink manual-link-behavior elementFont__titleLink margin-8-bottom"]',1)
