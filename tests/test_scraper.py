@@ -1,19 +1,8 @@
-from gettext import find
 from scraper_folder.scraper import Scraper
 from selenium.common.exceptions import ElementNotInteractableException
-from selenium.webdriver.common.by import By
 import unittest
 import os
 
-# unit testing ideas:
-# 1. Check that the uuid4 does not duplicate
-# 2. Check it gets the images for each, could probaly att wait for element to my functions for safety
-# 3. Add extra element in does it still work
-# 4. Change website, does it still work
-# 5. If there is a duplicate id will it error
-# 6. Does the data scraped match the expected values (foudn it doesn't seem to line 1/4 or brackets like (12 Ounce))
-# 7. using find elements when there is only one element in the multiple scraper - does it still work?
-# 8. Try with Firefox?
 
 class ScraperTestCase(unittest.TestCase):
 
@@ -34,7 +23,7 @@ class ScraperTestCase(unittest.TestCase):
         self.bot.accept_cookies('//*[@id="onetrust-accept-btn-handler"]')
         with self.assertRaises(ElementNotInteractableException):
             self.bot.accept_cookies('//*[@id="onetrust-accept-btn-handler"]')
-    
+
     def test_perform_search_with_bar(self):
         expected_value = 'https://www.allrecipes.com/search/results/?search=vegan+berry'
         self.bot.perform_search_with_bar('//input[@id="primary-search"]', 'vegan berry')
@@ -71,7 +60,7 @@ class ScraperTestCase(unittest.TestCase):
             'nutrition_summary': ['362 calories; protein 30g; carbohydrates 7.2g; fat 23.5g; cholesterol 93.3mg; sodium 680.1mg. Full Nutrition']
         }
         self.bot.driver.get('https://www.allrecipes.com/recipe/76967/grilled-salmon-with-cucumber-salad/')
-        actual_value =  self.bot.scrape_multiple_page_elements(
+        actual_value = self.bot.scrape_multiple_page_elements(
             ingredient_list='//span[@class="ingredients-item-name elementFont__body"]', 
             recipe_meta='//div[@class="recipe-meta-item"]',
             direction_steps='//ul[@class="instructions-section"]/li[@class="subcontainer instructions-section-item"][*]/label[@class="checkbox-list"]',
@@ -127,9 +116,7 @@ class ScraperTestCase(unittest.TestCase):
         # # 'test_image'
         if 'test_image' in os.listdir():
             os.remove(path)
-        # self.bot.driver.get('https://www.allrecipes.com/recipe/76967/grilled-salmon-with-cucumber-salad/')
-        self.bot.driver.get('https://www.allrecipes.com/recipe/160982/richard-and-suzannes-famous-red-beans-and-sausage/')
-        # self.bot.driver.get('https://www.allrecipes.com/recipe/282185/martina-mcbrides-kansas-creamy-mashed-potatoes/')
+        self.bot.driver.get('https://www.allrecipes.com/recipe/282185/martina-mcbrides-kansas-creamy-mashed-potatoes/')
         downloaded_image = self.bot.download_image('//div[@class="inner-container js-inner-container image-overlay"]/img', file)
         actual_value = 'test_image' not in os.listdir()
         if downloaded_image == 'No image downloaded':
@@ -144,8 +131,6 @@ class ScraperTestCase(unittest.TestCase):
         root_path = os.getcwd()
         # # Path
         path = os.path.join(root_path, directory_name)
-        # # Remove the file
-        # # 'test_image'
         if 'test_directory' in os.listdir():
             os.rmdir(path)
         expected_value = True
@@ -158,7 +143,6 @@ class ScraperTestCase(unittest.TestCase):
         file = 'test_json'
         # # File location
         root_path = os.getcwd()
-        # print(root_path)
         # # Path
         path = os.path.join(root_path, file)
         if 'test_json' in os.listdir():

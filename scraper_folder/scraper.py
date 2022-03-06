@@ -35,7 +35,7 @@ class Scraper:
         else:
             self.driver = webdriver.Chrome(ChromeDriverManager().install())
         self.driver.get(self.url)
-    
+
     def create_json(self, path: str, file_name: str, dict_name: str) -> None:
         """
         This function creates a json file from a dictionary.
@@ -60,7 +60,7 @@ class Scraper:
         """
         root_path = os.getcwd()
         return root_path
-    
+
     def extract_continous_digit_group(self, iterable_element: Iterable[str]) -> str:
         """
         This functions identifies a continuous set of numbers in a string
@@ -148,7 +148,7 @@ class Scraper:
         data = self.driver.find_elements(By.XPATH, xpath)
         data = [i.text for i in data]
         return data
-    
+
     def scrape_multiple_page_elements(self, **kwargs: str) -> dict:
         """
         This function scrapes n elements input by the user and
@@ -188,7 +188,7 @@ class Scraper:
         link = link.get_attribute(link_tag)
         self.driver.get(link)
         time.sleep(1)
-    
+
     def scroll_page(self) -> None:
         """
         This function scrolls to bottom of the page once.
@@ -271,14 +271,6 @@ class Scraper:
         link = [links.get_attribute('href') for links in links]
         return link
 
-    # def login(self, username, password, user_xpath, pass_xpath, button_xpath):
-    #         user_entry = self.driver.find_element(By.XPATH, user_xpath)
-    #         pass_entry = self.driver.find_element(By.XPATH, pass_xpath)
-    #         user_entry.send_keys(username)
-    #         pass_entry.send_keys(password)
-    #         sign_in_button = self.driver.find_element(By.XPATH, button_xpath)
-    #         sign_in_button.click()
-
     def generate_uuid4(self) -> str:
         """
         This function will generate a random unquie identifier using the uuid4
@@ -306,7 +298,7 @@ class Scraper:
             xpath (str): The x path element to be scraped that includes the
                 'src' element.
             file_name (str): The desried file_name.
-        
+
         Returns:
             result (str): The string returned specifies whther the process
                  sucessfully downloaded an image.
