@@ -1,3 +1,1 @@
-"""
-Package docstring
-"""
+"""Package docstring"""

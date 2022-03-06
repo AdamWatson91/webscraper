@@ -14,6 +14,7 @@ from typing import Optional, Iterable
 
 class Scraper:
     """
+
     This class provides the main functionality required to webscrape data using Chrome Webdriver.
 
     Args:
@@ -26,9 +27,7 @@ class Scraper:
         This is the webdriver object.
     """
     def __init__(self, url: str, options: Optional[str] = None) -> None:
-        """
-        See help(Scraper) for accurate signature.
-        """
+        """See help(Scraper) for accurate signature."""
         self.url = url
         if options:
             self.driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
@@ -36,7 +35,8 @@ class Scraper:
             self.driver = webdriver.Chrome(ChromeDriverManager().install())
         self.driver.get(self.url)
 
-    def create_json(self, path: str, file_name: str, dict_name: str) -> None:
+    @staticmethod
+    def create_json(path: str, file_name: str, dict_name: str) -> None:
         """
         This function creates a json file from a dictionary.
 
@@ -51,7 +51,8 @@ class Scraper:
             json.dump(dict_name, f)
         time.sleep(1)
 
-    def get_root_path(self) -> str:
+    @staticmethod
+    def get_root_path() -> str:
         """
         This function provides the root directory for the module.
 
@@ -61,7 +62,8 @@ class Scraper:
         root_path = os.getcwd()
         return root_path
 
-    def extract_continous_digit_group(self, iterable_element: Iterable[str]) -> str:
+    @staticmethod
+    def extract_continous_digit_group(iterable_element: Iterable[str]) -> str:
         """
         This functions identifies a continuous set of numbers in a string
         and returns it.
@@ -271,7 +273,8 @@ class Scraper:
         link = [links.get_attribute('href') for links in links]
         return link
 
-    def generate_uuid4(self) -> str:
+    @staticmethod
+    def generate_uuid4() -> str:
         """
         This function will generate a random unquie identifier using the uuid4
         format.
@@ -313,7 +316,8 @@ class Scraper:
             result = 'No image downloaded'
             return result
 
-    def create_directory(self, directory_name: str, directory_path: str) -> None:
+    @staticmethod
+    def create_directory(directory_name: str, directory_path: str) -> None:
         """
         This function creates a folder in the directory desired with the name
         desired.

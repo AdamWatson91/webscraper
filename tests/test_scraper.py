@@ -61,11 +61,11 @@ class ScraperTestCase(unittest.TestCase):
         }
         self.bot.driver.get('https://www.allrecipes.com/recipe/76967/grilled-salmon-with-cucumber-salad/')
         actual_value = self.bot.scrape_multiple_page_elements(
-            ingredient_list='//span[@class="ingredients-item-name elementFont__body"]', 
+            ingredient_list='//span[@class="ingredients-item-name elementFont__body"]',
             recipe_meta='//div[@class="recipe-meta-item"]',
             direction_steps='//ul[@class="instructions-section"]/li[@class="subcontainer instructions-section-item"][*]/label[@class="checkbox-list"]',
             directions_instructions='//div[@class="section-body elementFont__body--paragraphWithin elementFont__body--linkWithin"]/div[@class="paragraph"]/p',
-            nutrition_summary= '//div[@class="section-body"]'
+            nutrition_summary='//div[@class="section-body"]'
             )
         self.assertEqual(expected_value, actual_value)
 
