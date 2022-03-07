@@ -10,6 +10,11 @@ import uuid
 import os
 import json
 from typing import Optional, Iterable
+import boto3
+import tempfile
+import sqlalchemy
+from sqlalchemy import create_engine
+import pandas as pd
 
 
 class Scraper:
@@ -34,6 +39,12 @@ class Scraper:
         else:
             self.driver = webdriver.Chrome(ChromeDriverManager().install())
         self.driver.get(self.url)
+        self.client = boto3.client('s3')
+        with open('/home/adamw/Documents/AWS/RDS/webscraper-1/postgress_conn.json', mode='r') as f:
+            database_dict = json.load(f)
+        # self.engine = create_engine(f"{database_dict['DATABASE_TYPE']}+{database_dict['DBAPI']}://{database_dict['USER']}:{database_dict['PASSWORD']}@{database_dict['HOST']}:{database_dict['PORT']}/{database_dict['DATABASE']}")
+        # self.df = pd.read_sql('recipes', self.engine)
+        # self.scraped_ids = list(self.df['recipe_id'])
 
     @staticmethod
     def create_json(path: str, file_name: str, dict_name: str) -> None:
@@ -136,14 +147,15 @@ class Scraper:
         data = self.driver.find_element(By.XPATH, xpath).text
         return data
 
-    def scrape_page_elements(self, xpath: str) -> str:
+    def scrape_page_elements(self, xpath: str) -> list:
         """
         This function will find and scrape a list of elements.
         Each list element will be converted to text.
 
         Args:
             xpath (str): Xpath link for the element to be scraped.
-                Returns:
+        
+        Returns:
             data (list): a list of string representing the text in the
                 specified elements list.
         """
@@ -316,6 +328,40 @@ class Scraper:
             result = 'No image downloaded'
             return result
 
+    def upload_image(self, xpath: str, file_name: str) -> str:
+        """
+        This function will find the 'src' attribute for the image and upload
+        the image with a specified file name to an S3 bucket.
+
+        The download will occur in a temp directory to save storage. The user
+        can specify the file_name to be used when uploaded. Note if a file
+        exists with the same name it will be overwritten.
+
+        If the element entered is not found the function will print a message
+        notifying the user and return None as the output.
+
+        Args:
+            xpath (str): The x path element to be scraped that includes the
+                'src' element.
+            file_name (str): The desried file_name.
+
+        Returns:
+            result (str): The string returned specifies whther the process
+                 sucessfully downloaded an image.
+        """
+        try:
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                img = self.driver.find_element(By.XPATH, xpath).get_attribute('src')
+                urllib.request.urlretrieve(img, tmpdirname + file_name)
+                # ENHANCEMENT : bucket name could be intialised instead of reference within this method
+                self.client.upload_file(tmpdirname + file_name, 'watsonaicore', file_name)
+                result = 'Image uploaded'
+            return result
+        except NoSuchElementException:
+            print('No image was found with the element supplied')
+            result = 'No image uploaded'
+            return result
+
     @staticmethod
     def create_directory(directory_name: str, directory_path: str) -> None:
         """
@@ -338,6 +384,33 @@ class Scraper:
             print("Creation of the directory %s failed" % path)
         else:
             print("Successfully created the directory %s " % path)
+
+    def upload_directory(self, path: str, bucketname: str) -> None:
+        """
+        This function uploads a local directory to a sepcified AWS s3 bucket.
+
+        The function will identify the path and file names within the
+        provided directory and write to the specified s3 bucket based on this.
+        This function relies on the user configuring their IAM user with aws
+        configure prior to calling the function.
+
+        Credit to: https://www.developerfiles.com/upload-files-to-s3-with-python-keeping-the-original-folder-structure/
+
+        Args:
+            path (str): The root path for which all items within will be
+                uploaded.
+            bucketname (str): The name of the bucket that the user wants to
+                upload too.
+        """
+        session = boto3.Session()
+        s3 = session.resource('s3')
+        bucket = s3.Bucket(bucketname)
+
+        for subdir, dirs, files in os.walk(path):
+            for file in files:
+                full_path = os.path.join(subdir, file)
+                with open(full_path, 'rb') as data:
+                    bucket.put_object(Key=full_path[len(path)+1:], Body=data)
 
 
 if __name__ == "__main__":
@@ -374,7 +447,9 @@ if __name__ == "__main__":
         bot.create_json(recipe_path, 'data.json', recipe_dict)
         bot.create_directory('images', recipe_path)
         images_path = os.path.join(recipe_path, 'images')
-        bot.download_image(
-            '//div[@class="inner-container js-inner-container image-overlay"]/img',
-            os.path.join(images_path, str(0))
-            )
+        bot.upload_image('//div[@class="inner-container js-inner-container image-overlay"]/img', recipe_dict['recipe_id'][0])
+    #     bot.download_image(
+    #         '//div[@class="inner-container js-inner-container image-overlay"]/img',
+    #         os.path.join(images_path, str(0))
+    #         )
+    # bot.upload_directory(raw_data_path, 'watsonaicore')

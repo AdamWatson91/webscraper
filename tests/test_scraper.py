@@ -2,6 +2,9 @@ from scraper_folder.scraper import Scraper
 from selenium.common.exceptions import ElementNotInteractableException
 import unittest
 import os
+import boto3
+from moto import mock_s3
+
 
 
 class ScraperTestCase(unittest.TestCase):
@@ -9,6 +12,12 @@ class ScraperTestCase(unittest.TestCase):
     def setUp(self):
         # this is used to set up any variables that will be used in the tests.
         self.bot = Scraper('https://www.allrecipes.com/search/results/?search=')
+        self.client = boto3.client(
+            "s3",
+            region_name="eu-west-1",
+            aws_access_key_id="fake_access_key",
+            aws_secret_access_key="fake_secret_key",
+            )
 
     def test_activate_driver(self):
         # Check driver is going to the url that was provided
@@ -168,6 +177,10 @@ class ScraperTestCase(unittest.TestCase):
         actual_value = self.bot.extract_continous_digit_group('https://www.allrecipes.com/recipe/166727/donnas-123-sausage-balls/')
         print(actual_value)
         self.assertEqual(expected_value, actual_value)
+
+    @mock_s3
+    def test_upload_directory():
+
 
     def tearDown(self):
         # this is used to remove any of the variables set up from memory
