@@ -1,8 +1,12 @@
+from multiprocessing.connection import wait
+from sqlite3 import ProgrammingError
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from itertools import groupby
 import urllib.request
 import time
@@ -13,9 +17,12 @@ from typing import Optional, Iterable
 import boto3
 import tempfile
 import sqlalchemy
-from sqlalchemy import create_engine
+from sqlalchemy import column, create_engine
 import pandas as pd
 
+options = webdriver.ChromeOptions()
+options.add_argument("no-sandbox")
+# options.add_argument("--disable-dev-shm-usage")
 
 class Scraper:
     """
@@ -42,9 +49,13 @@ class Scraper:
         self.client = boto3.client('s3')
         with open('/home/adamw/Documents/AWS/RDS/webscraper-1/postgress_conn.json', mode='r') as f:
             database_dict = json.load(f)
-        # self.engine = create_engine(f"{database_dict['DATABASE_TYPE']}+{database_dict['DBAPI']}://{database_dict['USER']}:{database_dict['PASSWORD']}@{database_dict['HOST']}:{database_dict['PORT']}/{database_dict['DATABASE']}")
-        # self.df = pd.read_sql('recipes', self.engine)
-        # self.scraped_ids = list(self.df['recipe_id'])
+        self.engine = create_engine(f"{database_dict['DATABASE_TYPE']}+{database_dict['DBAPI']}://{database_dict['USER']}:{database_dict['PASSWORD']}@{database_dict['HOST']}:{database_dict['PORT']}/{database_dict['DATABASE']}")
+        try:
+            self.df = pd.read_sql('recipe', self.engine)
+            self.scraped_ids = list(self.df['recipe_id'])
+        except ProgrammingError:
+            print('No SQL table found during scraper iniatlisation')
+            pass
 
     @staticmethod
     def create_json(path: str, file_name: str, dict_name: str) -> None:
@@ -182,6 +193,9 @@ class Scraper:
         scraped_dict = {}
         for k, v in kwargs.items():
             try:
+                WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.XPATH, v))
+                )
                 v_element = self.driver.find_elements(By.XPATH, v)
                 v_element = [str(i.text).replace("\n", " ") for i in v_element]
             except NoSuchElementException:
@@ -412,44 +426,106 @@ class Scraper:
                 with open(full_path, 'rb') as data:
                     bucket.put_object(Key=full_path[len(path)+1:], Body=data)
 
+    @staticmethod
+    def dict_to_df(dict: dict) -> pd.DataFrame:
+        """
+        This function converts a dictionary to a pandas DataFrame.
+
+        Args:
+            dict (dict): The dictionary that the user want's to convert to
+                a DataFrame.
+        Returns:
+            df (pd.DataFrame): The pandas DataFrame that is have colunms
+                with the dict keys and rows with the dict values
+        """
+        dict_items = dict.items()
+        data_list = list(dict_items)
+        df = pd.DataFrame(data_list)
+        return df
+
 
 if __name__ == "__main__":
+    options = webdriver.ChromeOptions()
+    options.add_argument("no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
     URL = 'https://www.allrecipes.com/search/results/?search='
-    bot = Scraper(URL)
+    bot = Scraper(URL, options)
+    print(bot.scraped_ids)
     bot.accept_cookies('//*[@id="onetrust-accept-btn-handler"]', None)
     # bot.navigate_to('//a[@class="card__titleLink manual-link-behavior elementFont__titleLink margin-8-bottom"]', 'href')
+
     links = bot.scrape_page_links(
         '//a[@class="card__titleLink manual-link-behavior elementFont__titleLink margin-8-bottom"]',
         1
         )
-    bot.create_directory('raw_data', bot.get_root_path())
+    # bot.create_directory('raw_data', bot.get_root_path())
 
-    for link in links:
+    count = 0
+    for link in links[0:5]:
+        print(count) # Acting as loading screen for now
         # ENHANCEMENT: Download multiple images
         bot.driver.get(link)
-        time.sleep(2)
         recipe_dict = {
-            'recipe_uuid4': [bot.generate_uuid4()],
-            'recipe_id': [bot.extract_continous_digit_group(link)],
-            'link': [link],
+            'recipe_uuid4': bot.generate_uuid4(),
+            'recipe_id': bot.extract_continous_digit_group(link),
+            'link': link,
             }
         scraped_page_dict = bot.scrape_multiple_page_elements(
             ingredient_list='//span[@class="ingredients-item-name elementFont__body"]',
             recipe_meta='//div[@class="recipe-meta-item"]',
-            direction_steps='//ul[@class="instructions-section"]/li[@class="subcontainer instructions-section-item"][*]/label[@class="checkbox-list"]',
+            direction_steps='//span[@class="checkbox-list-text elementFont__subtitle--bold"]',
             directions_instructions='//div[@class="section-body elementFont__body--paragraphWithin elementFont__body--linkWithin"]/div[@class="paragraph"]/p',
             nutrition_summary='//div[@class="section-body"]'
             )
         recipe_dict.update(scraped_page_dict)
-        raw_data_path = os.path.join(bot.get_root_path(), 'raw_data')
-        bot.create_directory(recipe_dict['recipe_id'][0], raw_data_path)
-        recipe_path = os.path.join(raw_data_path, recipe_dict['recipe_id'][0])
-        bot.create_json(recipe_path, 'data.json', recipe_dict)
-        bot.create_directory('images', recipe_path)
-        images_path = os.path.join(recipe_path, 'images')
-        bot.upload_image('//div[@class="inner-container js-inner-container image-overlay"]/img', recipe_dict['recipe_id'][0])
+        if recipe_dict['recipe_id'] not in bot.scraped_ids:
+            image_id = bot.generate_uuid4()
+            bot.upload_image('//div[@class="inner-container js-inner-container image-overlay"]/img', image_id)
+            recipe_df_create = pd.DataFrame([{key: value for key, value in recipe_dict.items() if key in ['recipe_uuid4', 'recipe_id', 'link']}])
+            ingredients_df_create = pd.DataFrame({key: value for key, value in recipe_dict.items() if key in ['recipe_uuid4', 'ingredient_list']})
+            directions_df_create = pd.DataFrame({key: value for key, value in recipe_dict.items() if key in ['recipe_uuid4', 'direction_steps', 'directions_instructions']})
+            recipe_meta_df_create = pd.DataFrame({key: value for key, value in recipe_dict.items() if key in ['recipe_uuid4', 'recipe_meta']})
+            nutrition_summary_df_create = pd.DataFrame({key: value for key, value in recipe_dict.items() if key in ['recipe_uuid4', 'nutrition_summary']})
+            image_df_create = pd.DataFrame([{'image_id': image_id, 'recipe_id': recipe_dict['recipe_uuid4'], 'image_link': f"https://watsonaicore.s3.amazonaws.com/{image_id}"}])
+                
+            if count == 0:
+                recipe_df = recipe_df_create
+                ingredients_df = ingredients_df_create
+                directions_df = directions_df_create
+                recipe_meta_df = recipe_meta_df_create
+                nutrition_summary_df = nutrition_summary_df_create
+                image_df = image_df_create
+            else:
+                recipe_df = pd.concat([recipe_df, recipe_df_create])
+                ingredients_df = pd.concat([ingredients_df, ingredients_df_create])
+                directions_df = pd.concat([directions_df, directions_df_create])
+                recipe_meta_df = pd.concat([recipe_meta_df, recipe_meta_df_create])
+                nutrition_summary_df = pd.concat([nutrition_summary_df, nutrition_summary_df_create])
+                image_df = pd.concat([image_df, image_df_create])
+            count += 1
+        # raw_data_path = os.path.join(bot.get_root_path(), 'raw_data')
+        # bot.create_directory(recipe_dict['recipe_id'][0], raw_data_path)
+        # recipe_path = os.path.join(raw_data_path, recipe_dict['recipe_id'][0])
+        # bot.create_json(recipe_path, 'data.json', recipe_dict)
+        # bot.create_directory('images', recipe_path)
+        # images_path = os.path.join(recipe_path, 'images')
+        # bot.upload_image('//div[@class="inner-container js-inner-container image-overlay"]/img', recipe_dict['recipe_uuid4'][0])
+        
     #     bot.download_image(
     #         '//div[@class="inner-container js-inner-container image-overlay"]/img',
     #         os.path.join(images_path, str(0))
     #         )
     # bot.upload_directory(raw_data_path, 'watsonaicore')
+
+    print(image_df)
+    print(recipe_df)
+    print(ingredients_df)
+    print(directions_df)
+    print(recipe_meta_df)
+    print(nutrition_summary_df)
+    image_df.to_sql('image', bot.engine, if_exists='append')
+    recipe_df.to_sql('recipe', bot.engine, if_exists='append')
+    directions_df.to_sql('directions', bot.engine, if_exists='append')
+    ingredients_df.to_sql('ingredients', bot.engine, if_exists='append')
+    recipe_meta_df.to_sql('recipe_meta', bot.engine, if_exists='append')
+    nutrition_summary_df.to_sql('nutrition', bot.engine, if_exists='append')
