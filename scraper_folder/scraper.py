@@ -342,7 +342,7 @@ class Scraper:
             result = 'No image downloaded'
             return result
 
-    def upload_image(self, xpath: str, file_name: str) -> str:
+    def upload_image(self, xpath: str, file_name: str, bucket_name: str) -> str:
         """
         This function will find the 'src' attribute for the image and upload
         the image with a specified file name to an S3 bucket.
@@ -358,6 +358,8 @@ class Scraper:
             xpath (str): The x path element to be scraped that includes the
                 'src' element.
             file_name (str): The desried file_name.
+            bucket_name (str): The name of the s3 bucket the user wants to
+                upload too.
 
         Returns:
             result (str): The string returned specifies whther the process
@@ -367,8 +369,8 @@ class Scraper:
             with tempfile.TemporaryDirectory() as tmpdirname:
                 img = self.driver.find_element(By.XPATH, xpath).get_attribute('src')
                 urllib.request.urlretrieve(img, tmpdirname + file_name)
-                # ENHANCEMENT : bucket name could be intialised instead of reference within this method
-                self.client.upload_file(tmpdirname + file_name, 'watsonaicore', file_name)
+                # ENHANCEMENT : bucket name could be intialised instead of referenced within this method
+                self.client.upload_file(tmpdirname + file_name, bucket_name, file_name)
                 result = 'Image uploaded'
             return result
         except NoSuchElementException:
@@ -426,23 +428,6 @@ class Scraper:
                 with open(full_path, 'rb') as data:
                     bucket.put_object(Key=full_path[len(path)+1:], Body=data)
 
-    @staticmethod
-    def dict_to_df(dict: dict) -> pd.DataFrame:
-        """
-        This function converts a dictionary to a pandas DataFrame.
-
-        Args:
-            dict (dict): The dictionary that the user want's to convert to
-                a DataFrame.
-        Returns:
-            df (pd.DataFrame): The pandas DataFrame that is have colunms
-                with the dict keys and rows with the dict values
-        """
-        dict_items = dict.items()
-        data_list = list(dict_items)
-        df = pd.DataFrame(data_list)
-        return df
-
 
 if __name__ == "__main__":
     options = webdriver.ChromeOptions()
@@ -480,13 +465,17 @@ if __name__ == "__main__":
         recipe_dict.update(scraped_page_dict)
         if recipe_dict['recipe_id'] not in bot.scraped_ids:
             image_id = bot.generate_uuid4()
-            bot.upload_image('//div[@class="inner-container js-inner-container image-overlay"]/img', image_id)
+            bot.upload_image('//div[@class="inner-container js-inner-container image-overlay"]/img', image_id, 'watsonaicore')
             recipe_df_create = pd.DataFrame([{key: value for key, value in recipe_dict.items() if key in ['recipe_uuid4', 'recipe_id', 'link']}])
             ingredients_df_create = pd.DataFrame({key: value for key, value in recipe_dict.items() if key in ['recipe_uuid4', 'ingredient_list']})
             directions_df_create = pd.DataFrame({key: value for key, value in recipe_dict.items() if key in ['recipe_uuid4', 'direction_steps', 'directions_instructions']})
             recipe_meta_df_create = pd.DataFrame({key: value for key, value in recipe_dict.items() if key in ['recipe_uuid4', 'recipe_meta']})
             nutrition_summary_df_create = pd.DataFrame({key: value for key, value in recipe_dict.items() if key in ['recipe_uuid4', 'nutrition_summary']})
-            image_df_create = pd.DataFrame([{'image_id': image_id, 'recipe_id': recipe_dict['recipe_uuid4'], 'image_link': f"https://watsonaicore.s3.amazonaws.com/{image_id}"}])
+            image_df_create = pd.DataFrame([{
+                    'image_id': image_id,
+                    'recipe_id': recipe_dict['recipe_uuid4'],
+                    'image_link': f"https://watsonaicore.s3.amazonaws.com/{image_id}"
+                    }])
                 
             if count == 0:
                 recipe_df = recipe_df_create
@@ -503,26 +492,8 @@ if __name__ == "__main__":
                 nutrition_summary_df = pd.concat([nutrition_summary_df, nutrition_summary_df_create])
                 image_df = pd.concat([image_df, image_df_create])
             count += 1
-        # raw_data_path = os.path.join(bot.get_root_path(), 'raw_data')
-        # bot.create_directory(recipe_dict['recipe_id'][0], raw_data_path)
-        # recipe_path = os.path.join(raw_data_path, recipe_dict['recipe_id'][0])
-        # bot.create_json(recipe_path, 'data.json', recipe_dict)
-        # bot.create_directory('images', recipe_path)
-        # images_path = os.path.join(recipe_path, 'images')
-        # bot.upload_image('//div[@class="inner-container js-inner-container image-overlay"]/img', recipe_dict['recipe_uuid4'][0])
         
-    #     bot.download_image(
-    #         '//div[@class="inner-container js-inner-container image-overlay"]/img',
-    #         os.path.join(images_path, str(0))
-    #         )
     # bot.upload_directory(raw_data_path, 'watsonaicore')
-
-    print(image_df)
-    print(recipe_df)
-    print(ingredients_df)
-    print(directions_df)
-    print(recipe_meta_df)
-    print(nutrition_summary_df)
     image_df.to_sql('image', bot.engine, if_exists='append')
     recipe_df.to_sql('recipe', bot.engine, if_exists='append')
     directions_df.to_sql('directions', bot.engine, if_exists='append')
