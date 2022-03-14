@@ -4,7 +4,9 @@ from selenium.common.exceptions import ElementNotInteractableException
 import unittest
 import os
 import boto3
+import pandas as pd
 from moto import mock_s3
+from pandas.testing import assert_frame_equal
 
 
 
@@ -115,24 +117,24 @@ class ScraperTestCase(unittest.TestCase):
     #     actual_length = len(id_generated)
     #     self.assertEqual(expected_length, actual_length)
 
-    def test_download_image(self):
-        file = 'test_image'
-        # # File location
-        root_path = os.getcwd()
-        # # Path
-        path = os.path.join(root_path, file)
-        # # Remove the file
-        # # 'test_image'
-        if 'test_image' in os.listdir():
-            os.remove(path)
-        self.bot.driver.get('https://www.allrecipes.com/recipe/282185/martina-mcbrides-kansas-creamy-mashed-potatoes/')
-        downloaded_image = self.bot.download_image('//div[@class="inner-container js-inner-container image-overlay"]/img', file)
-        actual_value = 'test_image' not in os.listdir()
-        if downloaded_image == 'No image downloaded':
-            self.assertTrue(actual_value)
-        else:
-            self.assertFalse(actual_value)
-            os.remove(path)
+    # def test_download_image(self):
+    #     file = 'test_image'
+    #     # # File location
+    #     root_path = os.getcwd()
+    #     # # Path
+    #     path = os.path.join(root_path, file)
+    #     # # Remove the file
+    #     # # 'test_image'
+    #     if 'test_image' in os.listdir():
+    #         os.remove(path)
+    #     self.bot.driver.get('https://www.allrecipes.com/recipe/282185/martina-mcbrides-kansas-creamy-mashed-potatoes/')
+    #     downloaded_image = self.bot.download_image('//div[@class="inner-container js-inner-container image-overlay"]/img', file)
+    #     actual_value = 'test_image' not in os.listdir()
+    #     if downloaded_image == 'No image downloaded':
+    #         self.assertTrue(actual_value)
+    #     else:
+    #         self.assertFalse(actual_value)
+    #         os.remove(path)
 
     # def test_create_directory(self):
     #     directory_name = 'test_directory'
@@ -184,6 +186,13 @@ class ScraperTestCase(unittest.TestCase):
     #     actual_value = bucket['ResponseMetadata']['HTTPStatusCode']
     #     print(actual_value)
     #     self.assertEqual(expected_value, actual_value)
+
+    def test_create_df_from_dict_scalar():
+        # https://www.youtube.com/watch?v=e8_v2O7CRtE
+        df = 
+
+        
+        assert_frame_equal()
 
     def tearDown(self):
         # this is used to remove any of the variables set up from memory
