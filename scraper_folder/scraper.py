@@ -21,6 +21,7 @@ import pandas as pd
 import re
 from tqdm import tqdm
 import numpy as np
+import math
 
 
 class Scraper:
@@ -471,29 +472,153 @@ class Scraper:
             df = pd.DataFrame([{key: value for key, value in dictionary.items() if key in field_list}])
             return df
 
+    
+    def remove_from_list_via_list(self, remove_from, remove_with):
+        remove_from = [x for x in remove_from if x not in remove_with]
+        return remove_from
+
+
+class AllRecipes(Scraper):
+
+    def __init__(self):
+        options = webdriver.ChromeOptions()
+        options.add_argument('— disk-cache-size=0')
+        options.add_argument("no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        super().__init__('https://www.allrecipes.com/search/results/?search=', options)
+        self.accept_cookies('//*[@id="onetrust-accept-btn-handler"]', None)
+    
+    def scrape_links_from_search_page(self, scrape_count):
+        links_length = 0
+        # Build list of links by scrolling until scrape count is reached
+        pbar = tqdm(desc='Scraping links...', total= scrape_count)
+        while links_length < scrape_count:
+            # Get list of links after one scroll
+            links = []
+            links.extend(self.scrape_page_links(
+                '//a[@class="card__titleLink manual-link-behavior elementFont__titleLink margin-8-bottom"]',
+                1
+            ))
+            # Remove links already scraped
+            links = self.remove_from_list_via_list(links, self.scraped_ids)
+            links_length = len(links)
+            pbar.update(links_length)
+        links = links[:scrape_count]
+        return links
+    
+    def scrape_from_recipe_page(self, link):
+        self.driver.get(link)
+        recipe_dict = {
+            'recipe_uuid4': self.generate_uuid4(),
+            'recipe_id': self.extract_continous_digit_group(link),
+            'link': link,
+            }
+        scraped_page_dict = self.scrape_multiple_page_elements(
+            ingredient_list='//span[@class="ingredients-item-name elementFont__body"]',
+            recipe_meta='//div[@class="recipe-meta-item"]',
+            direction_steps='//span[@class="checkbox-list-text elementFont__subtitle--bold"]',
+            directions_instructions='//div[@class="section-body elementFont__body--paragraphWithin elementFont__body--linkWithin"]/div[@class="paragraph"]/p',
+            nutrition_summary='//div[@class="section-body"]',
+            sub_categories='//span[@class="breadcrumbs__title"]'
+            )
+        recipe_dict.update(scraped_page_dict)
+        return recipe_dict
+    
+    def create_image_upload_directory(self, recipe_dict):
+        try:
+            sub_cat = os.path.join("AllRecipes", re.sub(r'\W+', '', recipe_dict['sub_categories'][2]))
+        except IndexError:
+            sub_cat = os.path.join("AllRecipes", re.sub(r'\W+', '', recipe_dict['sub_categories'][-1]))
+        return sub_cat
+    
+    def create_recipe_dataframe(self, recipe_dict):
+        if recipe_dict['recipe_id'] not in self.scraped_ids:
+            image_id = self.generate_uuid4()
+            # EHANCEMENT: Currently image could be uploaded here but the RDS record is not created.
+            # This is because the flow might fail after uploading
+            # self.upload_image('//div[@class="inner-container js-inner-container image-overlay"]/img', image_id , 'watsonaicore', sub_cat)
+            recipe_df_create = self.create_df_from_dict(['recipe_uuid4', 'recipe_id', 'link'], recipe_dict)
+            ingredients_df_create = self.create_df_from_dict(['recipe_uuid4', 'ingredient_list'], recipe_dict)
+            directions_df_create = self.create_df_from_dict(['recipe_uuid4', 'direction_steps', 'directions_instructions'], recipe_dict)
+            recipe_meta_df_create = self.create_df_from_dict(['recipe_uuid4', 'recipe_meta'], recipe_dict)
+            nutrition_summary_df_create = self.create_df_from_dict(['recipe_uuid4', 'nutrition_summary'], recipe_dict)
+            image_df_create = pd.DataFrame([{
+                    'image_id': image_id,
+                    'recipe_id': recipe_dict['recipe_uuid4'],
+                    'image_link': f"https://watsonaicore.s3.amazonaws.com/{self.create_image_upload_directory(recipe_dict)}/{image_id}"
+                    }])
+                
+            # if count == 0:
+            recipe_df = recipe_df_create
+            ingredients_df = ingredients_df_create
+            directions_df = directions_df_create
+            recipe_meta_df = recipe_meta_df_create
+            nutrition_summary_df = nutrition_summary_df_create
+            image_df = image_df_create
+            # else:
+            #     recipe_df = pd.concat([recipe_df, recipe_df_create])
+            #     ingredients_df = pd.concat([ingredients_df, ingredients_df_create])
+            #     directions_df = pd.concat([directions_df, directions_df_create])
+            #     recipe_meta_df = pd.concat([recipe_meta_df, recipe_meta_df_create])
+            #     nutrition_summary_df = pd.concat([nutrition_summary_df, nutrition_summary_df_create])
+            #     image_df = pd.concat([image_df, image_df_create])
+            
+            return recipe_df, ingredients_df, directions_df, recipe_meta_df, nutrition_summary_df, image_df
+
+    def extend_recipe_dataframe(self, recipe_dict, recipe_df, ingredients_df, directions_df, recipe_meta_df, nutrition_summary_df, image_df):
+        if recipe_dict['recipe_id'] not in self.scraped_ids:
+            image_id = self.generate_uuid4()
+            # EHANCEMENT: Currently image could be uploaded here but the RDS record is not created.
+            # This is because the flow might fail after uploading
+            # self.upload_image('//div[@class="inner-container js-inner-container image-overlay"]/img', image_id , 'watsonaicore', sub_cat)
+            recipe_df_create = self.create_df_from_dict(['recipe_uuid4', 'recipe_id', 'link'], recipe_dict)
+            ingredients_df_create = self.create_df_from_dict(['recipe_uuid4', 'ingredient_list'], recipe_dict)
+            directions_df_create = self.create_df_from_dict(['recipe_uuid4', 'direction_steps', 'directions_instructions'], recipe_dict)
+            recipe_meta_df_create = self.create_df_from_dict(['recipe_uuid4', 'recipe_meta'], recipe_dict)
+            nutrition_summary_df_create = self.create_df_from_dict(['recipe_uuid4', 'nutrition_summary'], recipe_dict)
+            image_df_create = pd.DataFrame([{
+                    'image_id': image_id,
+                    'recipe_id': recipe_dict['recipe_uuid4'],
+                    'image_link': f"https://watsonaicore.s3.amazonaws.com/{self.create_image_upload_directory(recipe_dict)}/{image_id}"
+                    }])
+
+            recipe_df = pd.concat([recipe_df, recipe_df_create])
+            ingredients_df = pd.concat([ingredients_df, ingredients_df_create])
+            directions_df = pd.concat([directions_df, directions_df_create])
+            recipe_meta_df = pd.concat([recipe_meta_df, recipe_meta_df_create])
+            nutrition_summary_df = pd.concat([nutrition_summary_df, nutrition_summary_df_create])
+            image_df = pd.concat([image_df, image_df_create])
+            
+            return recipe_df, ingredients_df, directions_df, recipe_meta_df, nutrition_summary_df, image_df
+            
 
 if __name__ == "__main__":
     options = webdriver.ChromeOptions()
+    options.add_argument('— disk-cache-size=0')
     options.add_argument("no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     URL = 'https://www.allrecipes.com/search/results/?search='
     bot = Scraper(URL, options)
     bot.accept_cookies('//*[@id="onetrust-accept-btn-handler"]', None)
     # bot.navigate_to('//a[@class="card__titleLink manual-link-behavior elementFont__titleLink margin-8-bottom"]', 'href')
-    # ENHANCEMENT: Consider already scraped links in here
-    # ENHANCEMENT: scroll till a specified length
-    # ENHANCEMENT: add a progress bar
-    links = bot.scrape_page_links(
-        '//a[@class="card__titleLink manual-link-behavior elementFont__titleLink margin-8-bottom"]',
-        30
-        )
+    scrape_count = 60
+    links_length = 0
+    # Build list of links by scrolling until scrape count is reached
+    pbar = tqdm(desc='Scraping links...', total= scrape_count)
+    while links_length < scrape_count:
+        # Get list of links after one scroll
+        links = []
+        links.extend(bot.scrape_page_links(
+            '//a[@class="card__titleLink manual-link-behavior elementFont__titleLink margin-8-bottom"]',
+            1
+        ))
+        # Remove links already scraped
+        links = [x for x in links if x not in bot.scraped_links]
+        links_length = len(links)
+        pbar.update(links_length)
+    links = links[:scrape_count]
     count = 0
-    links = [x for x in links if x not in bot.scraped_links]
-    for index, link in tqdm(enumerate(links[0:400])):
-        print(f'\nThe link being scraped is - {link}')
-        print(index)
-        index_2 = index + 1
-        print(f'the next link in the index is {links[index_2]}')
+    for link in tqdm(links, desc='Scraping pages...'):
         # ENHANCEMENT: Download multiple images
         bot.driver.get(link)
         recipe_dict = {
@@ -518,17 +643,12 @@ if __name__ == "__main__":
             image_id = bot.generate_uuid4()
             # EHANCEMENT: Currently image could be uploaded here but the RDS record is not created.
             # This is because the flow might fail after uploading
-            bot.upload_image('//div[@class="inner-container js-inner-container image-overlay"]/img', image_id , 'watsonaicore', sub_cat)
+            # bot.upload_image('//div[@class="inner-container js-inner-container image-overlay"]/img', image_id , 'watsonaicore', sub_cat)
             recipe_df_create = bot.create_df_from_dict(['recipe_uuid4', 'recipe_id', 'link'], recipe_dict)
             ingredients_df_create = bot.create_df_from_dict(['recipe_uuid4', 'ingredient_list'], recipe_dict)
             directions_df_create = bot.create_df_from_dict(['recipe_uuid4', 'direction_steps', 'directions_instructions'], recipe_dict)
             recipe_meta_df_create = bot.create_df_from_dict(['recipe_uuid4', 'recipe_meta'], recipe_dict)
             nutrition_summary_df_create = bot.create_df_from_dict(['recipe_uuid4', 'nutrition_summary'], recipe_dict)
-            # recipe_df_create = pd.DataFrame([{key: value for key, value in recipe_dict.items() if key in ['recipe_uuid4', 'recipe_id', 'link']}])
-            # ingredients_df_create = pd.DataFrame({key: value for key, value in recipe_dict.items() if key in ['recipe_uuid4', 'ingredient_list']})
-            # directions_df_create = pd.DataFrame({key: value for key, value in recipe_dict.items() if key in ['recipe_uuid4', 'direction_steps', 'directions_instructions']})
-            # recipe_meta_df_create = pd.DataFrame({key: value for key, value in recipe_dict.items() if key in ['recipe_uuid4', 'recipe_meta']})
-            # nutrition_summary_df_create = pd.DataFrame({key: value for key, value in recipe_dict.items() if key in ['recipe_uuid4', 'nutrition_summary']})
             image_df_create = pd.DataFrame([{
                     'image_id': image_id,
                     'recipe_id': recipe_dict['recipe_uuid4'],
@@ -550,10 +670,10 @@ if __name__ == "__main__":
                 nutrition_summary_df = pd.concat([nutrition_summary_df, nutrition_summary_df_create])
                 image_df = pd.concat([image_df, image_df_create])
         count += 1
-        
-    image_df.to_sql('image', bot.engine, if_exists='append')
-    recipe_df.to_sql('recipe', bot.engine, if_exists='append')
-    directions_df.to_sql('directions', bot.engine, if_exists='append')
-    ingredients_df.to_sql('ingredients', bot.engine, if_exists='append')
-    recipe_meta_df.to_sql('recipe_meta', bot.engine, if_exists='append')
-    nutrition_summary_df.to_sql('nutrition', bot.engine, if_exists='append')
+
+    # image_df.to_sql('image', bot.engine, if_exists='append')
+    # recipe_df.to_sql('recipe', bot.engine, if_exists='append')
+    # directions_df.to_sql('directions', bot.engine, if_exists='append')
+    # ingredients_df.to_sql('ingredients', bot.engine, if_exists='append')
+    # recipe_meta_df.to_sql('recipe_meta', bot.engine, if_exists='append')
+    # nutrition_summary_df.to_sql('nutrition', bot.engine, if_exists='append')

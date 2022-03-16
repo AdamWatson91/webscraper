@@ -187,12 +187,29 @@ class ScraperTestCase(unittest.TestCase):
     #     print(actual_value)
     #     self.assertEqual(expected_value, actual_value)
 
-    def test_create_df_from_dict_scalar():
-        # https://www.youtube.com/watch?v=e8_v2O7CRtE
-        df = 
+    def test_create_df_from_dict_scalar(self):
+        # https://www.youtube.com/watch?v=e8_v2O7CRtE 
+        expected_df_1 = pd.DataFrame([{
+            'two_cols_one_row_1': '123',
+            'two_cols_one_row_2': '456'
+        }])
+        print(expected_df_1)
+        expected_df_2 = pd.DataFrame({
+            'one_col_two_rows': ['EFG', 'HIJ']
+        })
+        print(expected_df_2)
+        dictionary = {
+            'two_cols_one_row_1': '123',
+            'two_cols_one_row_2': '456',
+            'one_col_two_rows': ['EFG', 'HIJ']
+        }
+        actual_df_1 = self.bot.create_df_from_dict(['two_cols_one_row_1', 'two_cols_one_row_2'], dictionary)
+        print(actual_df_1)
+        actual_df_2 = self.bot.create_df_from_dict(['one_col_two_rows'], dictionary)
+        print(actual_df_2)
 
-        
-        assert_frame_equal()
+        assert_frame_equal(expected_df_1, actual_df_1)
+        assert_frame_equal(expected_df_2, actual_df_2)
 
     def tearDown(self):
         # this is used to remove any of the variables set up from memory
