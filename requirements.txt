@@ -5,3 +5,4 @@ setuptools==58.0.4
 SQLAlchemy==1.4.27
 tqdm==4.62.3
 webdriver_manager==3.5.3
+psycopg2

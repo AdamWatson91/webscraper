@@ -1,0 +1,9 @@
+{
+    "DATABASE_TYPE": "postgresql",
+    "DBAPI": "psycopg2",
+    "HOST": "webscraper-1.cchqmmeksyfa.us-east-1.rds.amazonaws.com",
+    "USER": "postgres",
+    "PASSWORD": "",
+    "DATABASE": "postgres",
+    "PORT": 5432
+}

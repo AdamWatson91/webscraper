@@ -20,8 +20,6 @@ from sqlalchemy import create_engine
 import pandas as pd
 import re
 from tqdm import tqdm
-import numpy as np
-import math
 
 
 class Scraper:
@@ -47,10 +45,20 @@ class Scraper:
         else:
             self.driver = webdriver.Chrome(ChromeDriverManager().install())
         self.driver.get(self.url)
-        self.client = boto3.client('s3')
-        with open('/home/adamw/Documents/AWS/RDS/webscraper-1/postgress_conn.json', mode='r') as f:
+        # self.key_id = input('Enter your AWS key id: ')
+        # self.secret_key = input('Enter your AWS secret key: ')
+        # self.bucket_name = input('Enter your s3 bucket name: ')
+        # self.region = input('Enter your AWS region: ')
+        self.client = boto3.client(
+            's3'
+            # aws_access_key_id=self.key_id
+            # aws_secret_access_key=self.secret_key
+            # region_name=self.region
+        )
+        with open(os.path.join(os.getcwd(),'postgres_conn.json'), mode='r') as f:
             database_dict = json.load(f)
-        self.engine = create_engine(f"{database_dict['DATABASE_TYPE']}+{database_dict['DBAPI']}://{database_dict['USER']}:{database_dict['PASSWORD']}@{database_dict['HOST']}:{database_dict['PORT']}/{database_dict['DATABASE']}")
+        self.RDS_pass = input('Enter the password to the RDS postgress DB:')
+        self.engine = create_engine(f"{database_dict['DATABASE_TYPE']}+{database_dict['DBAPI']}://{database_dict['USER']}:{self.RDS_pass}@{database_dict['HOST']}:{database_dict['PORT']}/{database_dict['DATABASE']}")
         # ENHANCEMENT : The below will error if the table does not already exist. how to avoid ?
         try:
             self.df = pd.read_sql('recipe', self.engine)
@@ -122,14 +130,22 @@ class Scraper:
         """
         time.sleep(2)
         try:
-            self.driver.switch_to(iframe)
+            WebDriverWait(self.driver, 5).until(
+                    EC.presence_of_element_located((By.XPATH, xpath))
+            )
+            # self.driver.switch_to(iframe)
             accept_cookies_button = self.driver.find_element(By.XPATH, xpath)
             accept_cookies_button.click()
             time.sleep(2)
         except TypeError:
+            WebDriverWait(self.driver, 5).until(
+                    EC.presence_of_element_located((By.XPATH, xpath))
+            )
             accept_cookies_button = self.driver.find_element(By.XPATH, xpath)
             accept_cookies_button.click()
             time.sleep(2)
+        except TimeoutException:
+            print('No cookies button clicked with xpath provided')
         else:
             print('No cookies button clicked with xpath provided')
 
@@ -471,27 +487,62 @@ class Scraper:
         except ValueError:  # If using all scalar values, you must pass an index
             df = pd.DataFrame([{key: value for key, value in dictionary.items() if key in field_list}])
             return df
+ 
+    def remove_from_list_via_list(self, remove_from: list, remove_with: list) -> list:
+        """
+        This function takes a list and removes any items from it that exist in
+        another list.
 
-    
-    def remove_from_list_via_list(self, remove_from, remove_with):
-        remove_from = [x for x in remove_from if x not in remove_with]
-        return remove_from
+        Args:
+            remove_from (list): The list that we want to remove items from.
+            remove_with (list): The list containing the items we want to remove
+                from the other list.
+        Returns:
+            transformed_list (list): The list with remaining items.
+        """
+        transformed_list = [x for x in remove_from if x not in remove_with]
+        return transformed_list
 
 
 class AllRecipes(Scraper):
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """
+        Set up the Scraper to work for AllRecipes.com. Visit the
+        intial search page and accept cookies.
+
+        Intialise the options required to support use of the scraper for this
+        site.
+        """
         options = webdriver.ChromeOptions()
         options.add_argument('— disk-cache-size=0')
         options.add_argument("no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
-        super().__init__('https://www.allrecipes.com/search/results/?search=', options)
+        options.add_argument("--headless")
+        options.add_argument("start-maximized")
+        options.add_argument("disable-infobars")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--disable-gpu")
+
+        super().__init__(
+            'https://www.allrecipes.com/search/results/?search=',
+            options
+            )
         self.accept_cookies('//*[@id="onetrust-accept-btn-handler"]', None)
-    
-    def scrape_links_from_search_page(self, scrape_count):
+
+    def scrape_links_from_search_page(self, scrape_count: int) -> list:
+        """
+        This function infinitely scrolls and collects a list of links up to
+        the number specified.
+
+        Args:
+            scrape_count (int): The number of links the user wants to screape
+                from.
+        """
         links_length = 0
+        # progress bar creations
+        pbar = tqdm(desc='Scraping links...', total=scrape_count)
         # Build list of links by scrolling until scrape count is reached
-        pbar = tqdm(desc='Scraping links...', total= scrape_count)
         while links_length < scrape_count:
             # Get list of links after one scroll
             links = []
@@ -501,12 +552,29 @@ class AllRecipes(Scraper):
             ))
             # Remove links already scraped
             links = self.remove_from_list_via_list(links, self.scraped_ids)
+            # Calculate number of links scraped after removal of those already scraped.
+            # If the number of links scraped is lower than required repeat.
             links_length = len(links)
+            # Update progress bar with the number of links scraped so far.
             pbar.update(links_length)
+        # Reduce the number of links down to be exactly the number specified by the user.
         links = links[:scrape_count]
         return links
-    
-    def scrape_from_recipe_page(self, link):
+
+    def scrape_from_recipe_page(self, link: str) -> dict:
+        """
+        This functions goes too and scraped recipe data for each link.
+
+        The function visits each link and begings scraping the required data.
+        If the user wnats more data from the webpage this can be updated.
+        This creates a dictionary for each link.
+
+        Args:
+            link (str): The url to scrape from.
+        Retruns:
+            recipe_dict (dict): The disctionary with all scraped data for the
+                recipe.
+        """
         self.driver.get(link)
         recipe_dict = {
             'recipe_uuid4': self.generate_uuid4(),
@@ -523,157 +591,118 @@ class AllRecipes(Scraper):
             )
         recipe_dict.update(scraped_page_dict)
         return recipe_dict
-    
-    def create_image_upload_directory(self, recipe_dict):
+
+    def create_image_upload_directory(self, recipe_dict: dict) -> str:
+        """
+        This function creates the folder strucutre for uploading the recipe
+        data for AllRecipes.
+
+        The function scrapes the sub-categories that ar eused by the
+        website for each recipe. The final sub-category with be prefixed
+        with AllRecipes and then either the first two categories or the last
+        category is selected.
+
+        Args:
+            recipe_dict (dict): The dictionary with the recipe data, including
+                the sub-categories.
+        Returns:
+            sub_cat (str): A string with / to specific directory or catgeories
+                for the recipe
+        """
         try:
             sub_cat = os.path.join("AllRecipes", re.sub(r'\W+', '', recipe_dict['sub_categories'][2]))
         except IndexError:
             sub_cat = os.path.join("AllRecipes", re.sub(r'\W+', '', recipe_dict['sub_categories'][-1]))
         return sub_cat
-    
-    def create_recipe_dataframe(self, recipe_dict):
-        if recipe_dict['recipe_id'] not in self.scraped_ids:
-            image_id = self.generate_uuid4()
-            # EHANCEMENT: Currently image could be uploaded here but the RDS record is not created.
-            # This is because the flow might fail after uploading
-            # self.upload_image('//div[@class="inner-container js-inner-container image-overlay"]/img', image_id , 'watsonaicore', sub_cat)
-            recipe_df_create = self.create_df_from_dict(['recipe_uuid4', 'recipe_id', 'link'], recipe_dict)
-            ingredients_df_create = self.create_df_from_dict(['recipe_uuid4', 'ingredient_list'], recipe_dict)
-            directions_df_create = self.create_df_from_dict(['recipe_uuid4', 'direction_steps', 'directions_instructions'], recipe_dict)
-            recipe_meta_df_create = self.create_df_from_dict(['recipe_uuid4', 'recipe_meta'], recipe_dict)
-            nutrition_summary_df_create = self.create_df_from_dict(['recipe_uuid4', 'nutrition_summary'], recipe_dict)
-            image_df_create = pd.DataFrame([{
-                    'image_id': image_id,
-                    'recipe_id': recipe_dict['recipe_uuid4'],
-                    'image_link': f"https://watsonaicore.s3.amazonaws.com/{self.create_image_upload_directory(recipe_dict)}/{image_id}"
-                    }])
-                
-            # if count == 0:
-            recipe_df = recipe_df_create
-            ingredients_df = ingredients_df_create
-            directions_df = directions_df_create
-            recipe_meta_df = recipe_meta_df_create
-            nutrition_summary_df = nutrition_summary_df_create
-            image_df = image_df_create
-            # else:
-            #     recipe_df = pd.concat([recipe_df, recipe_df_create])
-            #     ingredients_df = pd.concat([ingredients_df, ingredients_df_create])
-            #     directions_df = pd.concat([directions_df, directions_df_create])
-            #     recipe_meta_df = pd.concat([recipe_meta_df, recipe_meta_df_create])
-            #     nutrition_summary_df = pd.concat([nutrition_summary_df, nutrition_summary_df_create])
-            #     image_df = pd.concat([image_df, image_df_create])
-            
-            return recipe_df, ingredients_df, directions_df, recipe_meta_df, nutrition_summary_df, image_df
 
-    def extend_recipe_dataframe(self, recipe_dict, recipe_df, ingredients_df, directions_df, recipe_meta_df, nutrition_summary_df, image_df):
-        if recipe_dict['recipe_id'] not in self.scraped_ids:
-            image_id = self.generate_uuid4()
-            # EHANCEMENT: Currently image could be uploaded here but the RDS record is not created.
-            # This is because the flow might fail after uploading
-            # self.upload_image('//div[@class="inner-container js-inner-container image-overlay"]/img', image_id , 'watsonaicore', sub_cat)
-            recipe_df_create = self.create_df_from_dict(['recipe_uuid4', 'recipe_id', 'link'], recipe_dict)
-            ingredients_df_create = self.create_df_from_dict(['recipe_uuid4', 'ingredient_list'], recipe_dict)
-            directions_df_create = self.create_df_from_dict(['recipe_uuid4', 'direction_steps', 'directions_instructions'], recipe_dict)
-            recipe_meta_df_create = self.create_df_from_dict(['recipe_uuid4', 'recipe_meta'], recipe_dict)
-            nutrition_summary_df_create = self.create_df_from_dict(['recipe_uuid4', 'nutrition_summary'], recipe_dict)
-            image_df_create = pd.DataFrame([{
-                    'image_id': image_id,
-                    'recipe_id': recipe_dict['recipe_uuid4'],
-                    'image_link': f"https://watsonaicore.s3.amazonaws.com/{self.create_image_upload_directory(recipe_dict)}/{image_id}"
-                    }])
+    def create_recipe_dataframe(self, recipe_dict: dict) -> pd.DataFrame:
+        """
+        This function creates the dataframe where one does not already exist,
+        based on the dictionary.
 
-            recipe_df = pd.concat([recipe_df, recipe_df_create])
-            ingredients_df = pd.concat([ingredients_df, ingredients_df_create])
-            directions_df = pd.concat([directions_df, directions_df_create])
-            recipe_meta_df = pd.concat([recipe_meta_df, recipe_meta_df_create])
-            nutrition_summary_df = pd.concat([nutrition_summary_df, nutrition_summary_df_create])
-            image_df = pd.concat([image_df, image_df_create])
-            
-            return recipe_df, ingredients_df, directions_df, recipe_meta_df, nutrition_summary_df, image_df
-            
+        Args:
+            recipe_dict (dict): The dictionary with the scraped recipe data.
+        Returns:
+            recipe_df (pd.DataFrame): The dataframe with the spefified
+            dictionary values for this data.
+            ingredients_df (pd.DataFrame): The dataframe with the spefified
+            dictionary values for this data.
+            directions_df (pd.DataFrame): The dataframe with the spefified
+            dictionary values for this data.
+            recipe_meta_df (pd.DataFrame): The dataframe with the spefified
+            dictionary values for this data.
+            nutrition_summary_df (pd.DataFrame): The dataframe with the
+            spefified dictionary values for this data.
+            image_df (pd.DataFrame): The dataframe with the spefified
+            dictionary values for this data.
+        """
+        image_id = self.generate_uuid4()
+        recipe_df_create = self.create_df_from_dict(['recipe_uuid4', 'recipe_id', 'link'], recipe_dict)
+        ingredients_df_create = self.create_df_from_dict(['recipe_uuid4', 'ingredient_list'], recipe_dict)
+        directions_df_create = self.create_df_from_dict(['recipe_uuid4', 'direction_steps', 'directions_instructions'], recipe_dict)
+        recipe_meta_df_create = self.create_df_from_dict(['recipe_uuid4', 'recipe_meta'], recipe_dict)
+        nutrition_summary_df_create = self.create_df_from_dict(['recipe_uuid4', 'nutrition_summary'], recipe_dict)
+        image_df_create = pd.DataFrame([{
+                'image_id': image_id,
+                'recipe_id': recipe_dict['recipe_uuid4'],
+                'image_link': f"https://watsonaicore.s3.amazonaws.com/{self.create_image_upload_directory(recipe_dict)}/{image_id}"
+                }])
+        recipe_df = recipe_df_create
+        ingredients_df = ingredients_df_create
+        directions_df = directions_df_create
+        recipe_meta_df = recipe_meta_df_create
+        nutrition_summary_df = nutrition_summary_df_create
+        image_df = image_df_create
+        return recipe_df, ingredients_df, directions_df, recipe_meta_df, nutrition_summary_df, image_df
 
-if __name__ == "__main__":
-    options = webdriver.ChromeOptions()
-    options.add_argument('— disk-cache-size=0')
-    options.add_argument("no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    URL = 'https://www.allrecipes.com/search/results/?search='
-    bot = Scraper(URL, options)
-    bot.accept_cookies('//*[@id="onetrust-accept-btn-handler"]', None)
-    # bot.navigate_to('//a[@class="card__titleLink manual-link-behavior elementFont__titleLink margin-8-bottom"]', 'href')
-    scrape_count = 60
-    links_length = 0
-    # Build list of links by scrolling until scrape count is reached
-    pbar = tqdm(desc='Scraping links...', total= scrape_count)
-    while links_length < scrape_count:
-        # Get list of links after one scroll
-        links = []
-        links.extend(bot.scrape_page_links(
-            '//a[@class="card__titleLink manual-link-behavior elementFont__titleLink margin-8-bottom"]',
-            1
-        ))
-        # Remove links already scraped
-        links = [x for x in links if x not in bot.scraped_links]
-        links_length = len(links)
-        pbar.update(links_length)
-    links = links[:scrape_count]
-    count = 0
-    for link in tqdm(links, desc='Scraping pages...'):
-        # ENHANCEMENT: Download multiple images
-        bot.driver.get(link)
-        recipe_dict = {
-            'recipe_uuid4': bot.generate_uuid4(),
-            'recipe_id': bot.extract_continous_digit_group(link),
-            'link': link,
-            }
-        scraped_page_dict = bot.scrape_multiple_page_elements(
-            ingredient_list='//span[@class="ingredients-item-name elementFont__body"]',
-            recipe_meta='//div[@class="recipe-meta-item"]',
-            direction_steps='//span[@class="checkbox-list-text elementFont__subtitle--bold"]',
-            directions_instructions='//div[@class="section-body elementFont__body--paragraphWithin elementFont__body--linkWithin"]/div[@class="paragraph"]/p',
-            nutrition_summary='//div[@class="section-body"]',
-            sub_categories='//span[@class="breadcrumbs__title"]'
-            )
-        recipe_dict.update(scraped_page_dict)
-        try:
-            sub_cat = os.path.join("AllRecipes", re.sub(r'\W+', '', recipe_dict['sub_categories'][2]))
-        except IndexError:
-            sub_cat = os.path.join("AllRecipes", re.sub(r'\W+', '', recipe_dict['sub_categories'][-1]))
-        if recipe_dict['recipe_id'] not in bot.scraped_ids:
-            image_id = bot.generate_uuid4()
-            # EHANCEMENT: Currently image could be uploaded here but the RDS record is not created.
-            # This is because the flow might fail after uploading
-            # bot.upload_image('//div[@class="inner-container js-inner-container image-overlay"]/img', image_id , 'watsonaicore', sub_cat)
-            recipe_df_create = bot.create_df_from_dict(['recipe_uuid4', 'recipe_id', 'link'], recipe_dict)
-            ingredients_df_create = bot.create_df_from_dict(['recipe_uuid4', 'ingredient_list'], recipe_dict)
-            directions_df_create = bot.create_df_from_dict(['recipe_uuid4', 'direction_steps', 'directions_instructions'], recipe_dict)
-            recipe_meta_df_create = bot.create_df_from_dict(['recipe_uuid4', 'recipe_meta'], recipe_dict)
-            nutrition_summary_df_create = bot.create_df_from_dict(['recipe_uuid4', 'nutrition_summary'], recipe_dict)
-            image_df_create = pd.DataFrame([{
-                    'image_id': image_id,
-                    'recipe_id': recipe_dict['recipe_uuid4'],
-                    'image_link': f"https://watsonaicore.s3.amazonaws.com/{sub_cat}/{image_id}"
-                    }])
-                
-            if count == 0:
-                recipe_df = recipe_df_create
-                ingredients_df = ingredients_df_create
-                directions_df = directions_df_create
-                recipe_meta_df = recipe_meta_df_create
-                nutrition_summary_df = nutrition_summary_df_create
-                image_df = image_df_create
-            else:
-                recipe_df = pd.concat([recipe_df, recipe_df_create])
-                ingredients_df = pd.concat([ingredients_df, ingredients_df_create])
-                directions_df = pd.concat([directions_df, directions_df_create])
-                recipe_meta_df = pd.concat([recipe_meta_df, recipe_meta_df_create])
-                nutrition_summary_df = pd.concat([nutrition_summary_df, nutrition_summary_df_create])
-                image_df = pd.concat([image_df, image_df_create])
-        count += 1
+    def extend_recipe_dataframe(self, recipe_dict: dict, recipe_df: pd.DataFrame, ingredients_df: pd.DataFrame, directions_df: pd.DataFrame, recipe_meta_df: pd.DataFrame, nutrition_summary_df: pd.DataFrame, image_df: pd.DataFrame):
+        """
+        This function extends the dataframe where one does not already exist,
+        based on the dictionary.
 
-    # image_df.to_sql('image', bot.engine, if_exists='append')
-    # recipe_df.to_sql('recipe', bot.engine, if_exists='append')
-    # directions_df.to_sql('directions', bot.engine, if_exists='append')
-    # ingredients_df.to_sql('ingredients', bot.engine, if_exists='append')
-    # recipe_meta_df.to_sql('recipe_meta', bot.engine, if_exists='append')
-    # nutrition_summary_df.to_sql('nutrition', bot.engine, if_exists='append')
+        Args:
+            recipe_dict (dict): The dictionary with the scraped recipe data.
+            recipe_df (pd.DataFrame): The dataframe with the spefified
+            dictionary values for this data that was already created.
+            ingredients_df (pd.DataFrame): The dataframe with the spefified
+            dictionary values for this data that was already created.
+            directions_df (pd.DataFrame): The dataframe with the spefified
+            dictionary values for this data that was already created.
+            recipe_meta_df (pd.DataFrame): The dataframe with the spefified
+            dictionary values for this data that was already created.
+            nutrition_summary_df (pd.DataFrame): The dataframe with the
+            spefified dictionary values for this data that was already created.
+            image_df (pd.DataFrame): The dataframe with the spefified
+            dictionary values for this data that was already created.
+        Returns:
+            recipe_df (pd.DataFrame): The dataframe with the spefified
+            dictionary values for this data.
+            ingredients_df (pd.DataFrame): The dataframe with the spefified
+            dictionary values for this data.
+            directions_df (pd.DataFrame): The dataframe with the spefified
+            dictionary values for this data.
+            recipe_meta_df (pd.DataFrame): The dataframe with the spefified
+            dictionary values for this data.
+            nutrition_summary_df (pd.DataFrame): The dataframe with the
+            spefified dictionary values for this data.
+            image_df (pd.DataFrame): The dataframe with the spefified
+            dictionary values for this data.
+        """
+        image_id = self.generate_uuid4()
+        recipe_df_create = self.create_df_from_dict(['recipe_uuid4', 'recipe_id', 'link'], recipe_dict)
+        ingredients_df_create = self.create_df_from_dict(['recipe_uuid4', 'ingredient_list'], recipe_dict)
+        directions_df_create = self.create_df_from_dict(['recipe_uuid4', 'direction_steps', 'directions_instructions'], recipe_dict)
+        recipe_meta_df_create = self.create_df_from_dict(['recipe_uuid4', 'recipe_meta'], recipe_dict)
+        nutrition_summary_df_create = self.create_df_from_dict(['recipe_uuid4', 'nutrition_summary'], recipe_dict)
+        image_df_create = pd.DataFrame([{
+                'image_id': image_id,
+                'recipe_id': recipe_dict['recipe_uuid4'],
+                'image_link': f"https://watsonaicore.s3.amazonaws.com/{self.create_image_upload_directory(recipe_dict)}/{image_id}"
+                }])
+        recipe_df = pd.concat([recipe_df, recipe_df_create])
+        ingredients_df = pd.concat([ingredients_df, ingredients_df_create])
+        directions_df = pd.concat([directions_df, directions_df_create])
+        recipe_meta_df = pd.concat([recipe_meta_df, recipe_meta_df_create])
+        nutrition_summary_df = pd.concat([nutrition_summary_df, nutrition_summary_df_create])
+        image_df = pd.concat([image_df, image_df_create])
+        return recipe_df, ingredients_df, directions_df, recipe_meta_df, nutrition_summary_df, image_df
