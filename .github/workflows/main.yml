@@ -31,5 +31,3 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: ${{ secrets.DOCKER_HUB_USERNAME }}/all_recipes_scraper:latest
-    # The type of runner that the job will run on
-    runs-on: ubuntu-latest
