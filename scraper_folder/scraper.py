@@ -55,18 +55,20 @@ class Scraper:
             # aws_secret_access_key=self.secret_key
             # region_name=self.region
         )
-        with open(os.path.join(os.getcwd(),'postgres_conn.json'), mode='r') as f:
-            database_dict = json.load(f)
-        self.RDS_pass = input('Enter the password to the RDS postgress DB:')
-        self.engine = create_engine(f"{database_dict['DATABASE_TYPE']}+{database_dict['DBAPI']}://{database_dict['USER']}:{self.RDS_pass}@{database_dict['HOST']}:{database_dict['PORT']}/{database_dict['DATABASE']}")
+        # with open(os.path.join(os.getcwd(),'postgres_conn.json'), mode='r') as f:
+        #     database_dict = json.load(f)
+        # self.RDS_pass = input('Enter the password to the RDS postgress DB:')
+        # self.engine = create_engine(f"{database_dict['DATABASE_TYPE']}+{database_dict['DBAPI']}://{database_dict['USER']}:{self.RDS_pass}@{database_dict['HOST']}:{database_dict['PORT']}/{database_dict['DATABASE']}")
         # ENHANCEMENT : The below will error if the table does not already exist. how to avoid ?
-        try:
-            self.df = pd.read_sql('recipe', self.engine)
-            self.scraped_ids = list(self.df['recipe_id'])
-            self.scraped_links = list(self.df['link'])
-        except ProgrammingError:
-            print('No SQL table found during scraper iniatlisation')
-            pass
+        # try:
+        #     self.df = pd.read_sql('recipe', self.engine)
+        #     self.scraped_ids = list(self.df['recipe_id'])
+        #     self.scraped_links = list(self.df['link'])
+        self.scraped_ids = []
+        self.scraped_links = []
+        # except ProgrammingError:
+        #     print('No SQL table found during scraper iniatlisation')
+        #     pass
 
     @staticmethod
     def create_json(path: str, file_name: str, dict_name: str) -> None:
@@ -518,7 +520,7 @@ class AllRecipes(Scraper):
         options.add_argument('— disk-cache-size=0')
         options.add_argument("no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--headless")
+        # options.add_argument("--headless")
         options.add_argument("start-maximized")
         options.add_argument("disable-infobars")
         options.add_argument("--disable-extensions")
@@ -563,16 +565,16 @@ class AllRecipes(Scraper):
 
     def scrape_from_recipe_page(self, link: str) -> dict:
         """
-        This functions goes too and scraped recipe data for each link.
+        This function goes too and scrapes recipe data for each link.
 
-        The function visits each link and begings scraping the required data.
-        If the user wnats more data from the webpage this can be updated.
+        The function visits each link and scrapes the required data.
+        If the user wants more data from the webpage this can be updated.
         This creates a dictionary for each link.
 
         Args:
             link (str): The url to scrape from.
         Retruns:
-            recipe_dict (dict): The disctionary with all scraped data for the
+            recipe_dict (dict): The dictionary with all scraped data for the
                 recipe.
         """
         self.driver.get(link)

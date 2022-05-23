@@ -28,6 +28,7 @@ The Scraper class includes the following features delivered through class method
 * Upload image to S3 bucket (upload_image)
 * Create local directory  (create_directory)
 * Upload local directory to S3 bucket  (upload_directory)
+* Create a pandas dataframe based on a set of dictionary keys (create_df_from_dict)
 
 
 ## Installation
@@ -114,6 +115,14 @@ bot.create_directory('raw_data', bot.get_root_path())
 # Uploads a your projects local root directory to an s3 bucket named 'S3_BUCKET' following the same folder struture as you have locally.
 bot.upload_directory(os.getcwd(), 'S3_BUCKET')
 
+# first result returns otwo columns with one row and the second, one column two rows
+dictionary = {
+    'two_cols_one_row_1': '123',
+    'two_cols_one_row_2': '456',
+    'one_col_two_rows': ['EFG', 'HIJ']
+}
+self.bot.create_df_from_dict(['two_cols_one_row_1', 'two_cols_one_row_2'], dictionary)
+self.bot.create_df_from_dict(['one_col_two_rows'], dictionary)
 ```
 ## Roadmap
 The following are planned developments:
@@ -121,7 +130,7 @@ The following are planned developments:
 * Include progress bar for infinite scroll
 * Amend max scroll argument to request for number of links to scrape. This will enable user more flexibility
 * Add ability to download multiple images
-* Add class for allrecipes.com for scraping
+* Add class for allrecipes.com for scraping in different ways (e.e.g infinite scroll or link based)
 * Add class for at least one other recipe website - others to follow
 * Scrape more data that will be useful e.g. review score a comments
 
